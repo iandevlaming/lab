@@ -1,0 +1,9 @@
+# Use gcc config as default
+build --config=gcc
+
+# Use a custom gcc c++ toolchain
+build:gcc --crosstool_top=//toolchain:gcc_suite
+
+# Use a combination of compiler / cpu for differentiator
+build:gcc --cpu=k8
+build:gcc --compiler=gcc
