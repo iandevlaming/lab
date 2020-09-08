@@ -4,6 +4,7 @@
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <functional>
 #include <math.h>
 #include <string>
 #include <type_traits>
@@ -13,6 +14,8 @@ namespace algo_opt
 {
 template <int N>
 using bracket_t = std::array<double, N>;
+using unary_f_t = std::function<double(double)>;
+
 template <typename F>
 using enable_if_1d_function =
     std::enable_if_t<std::is_invocable_r_v<double, F, double>>;
@@ -66,6 +69,7 @@ template <typename F, typename = enable_if_1d_function<F>>
 bracket_t<2>
 fibonacci_search(F f, bracket_t<2> bracket, unsigned int n, double eps = 0.01)
 {
+  eps = abs(eps);
   auto &[a, b] = bracket;
 
   // from Binet's formula Fn = (phi^n - (1 - phi)^n)/sqrt(5), with phi as the
@@ -230,6 +234,7 @@ bracket_t<2> bisection(F df,
                        double eps,
                        std::vector<bracket_t<2>> *log = nullptr)
 {
+  eps = abs(eps);
   std::ranges::sort(bracket);
   auto &[a, b] = bracket;
   assert(a != b);
@@ -263,4 +268,135 @@ bracket_t<2> bisection(F df,
 
   return bracket;
 }
+
+// obviously, in production-grade code, you'd need additional termination
+// guarantees
+template <typename F, typename = enable_if_1d_function<F>>
+double bisection_min(F df, bracket_t<2> bracket, double eps)
+{
+  eps = abs(eps);
+  bracket = bisection(df, bracket, eps);
+  return abs(df(bracket[0])) < abs(df(bracket[1])) ? bracket[0] : bracket[1];
+}
+
+template <typename F, typename = enable_if_1d_function<F>>
+double secant_min(F df, bracket_t<2> bracket, double eps)
+{
+  eps = abs(eps);
+  while (abs(bracket[0] - bracket[1]) > eps)
+  {
+    auto [xn_2, xn_1] = bracket;
+    auto xn = xn_1 - df(xn_1) * (xn_1 - xn_2) / (df(xn_1) - df(xn_2));
+    bracket = bracket_t<2>({xn_1, xn});
+  }
+
+  return abs(df(bracket[0])) < abs(df(bracket[1])) ? bracket[0] : bracket[1];
+}
+
+unary_f_t lagrange_poly_fit(const std::vector<Point2d> &points)
+{
+  assert(points.size() >= 2);
+  const auto k = points.size();
+
+  auto x = std::vector<double>(k);
+  auto y = std::vector<double>(k);
+  for (unsigned int i = 0; i < k; ++i)
+  {
+    x[i] = points[i].x;
+    y[i] = points[i].y;
+  }
+
+  auto l = std::vector<unary_f_t>(k);
+  for (unsigned int j = 0; j < k; ++j)
+  {
+    auto lj = std::vector<unary_f_t>();
+    const auto &xj = x[j];
+    for (unsigned int m = 0; m < k; ++m)
+    {
+      if (m == j)
+        continue;
+      const auto &xm = x[m];
+      lj.push_back([xj, xm](double xi) { return (xi - xm) / (xj - xm); });
+    }
+    l[j] = [lj](double xi) {
+      auto yi = 1.0;
+      std::for_each(lj.begin(), lj.end(), [&](auto &lji) { yi *= lji(xi); });
+      return yi;
+    };
+  }
+
+  auto L = [l, y, k](double xi) {
+    auto yi = 0.0;
+    for (unsigned int j = 0; j < k; ++j)
+      yi += y[j] * l[j](xi);
+    return yi;
+  };
+
+  return L;
+}
+
+unary_f_t inverse_lagrange_poly_fit(const std::vector<Point2d> &points)
+{
+  auto inv_points = std::vector<Point2d>();
+  auto invPoint = [](auto p) { return Point2d({p.y, p.x}); };
+  std::transform(
+      points.cbegin(), points.cend(), std::back_inserter(inv_points), invPoint);
+  return lagrange_poly_fit(inv_points);
+}
+
+/**
+ * @see https://en.wikipedia.org/wiki/Brent%27s_method
+ */
+template <typename F, typename = enable_if_1d_function<F>>
+double brent_min(F df, const bracket_t<2> &bracket, double eps)
+{
+  eps = abs(eps);
+  auto a = Point2d({bracket[0], df(bracket[0])});
+  auto b = Point2d({bracket[1], df(bracket[1])});
+  assert(a.y * b.y < 0.0); // function must be bracketed
+
+  if (abs(a.y) < abs(b.y))
+    std::swap(a, b); // b should be our best guess so far
+
+  auto c = a;
+  auto d = c;
+  auto s = d;
+  auto mflag = true;
+
+  // bisection conditions (god have mercy on me for all this awful code)
+  auto c1 = [&]() {
+    return s.x >= std::min((3.0 * a.x + b.x) / 4.0, b.x) &&
+           s.x <= std::max((3.0 * a.x + b.x) / 4.0, b.x);
+  };
+  auto c2 = [&]() { return mflag && abs(s.x - b.x) >= abs(b.x - c.x) / 2.0; };
+  auto c3 = [&]() { return !mflag && abs(s.x - b.x) >= abs(c.x - c.x) / 2.0; };
+  auto c4 = [&]() { return mflag && abs(b.x - c.x) < eps; };
+  auto c5 = [&]() { return !mflag && abs(c.x - d.x) < eps; };
+
+  while (abs(b.x - a.x) > eps) // original algo also checks f(b) or f(s) == 0
+  {
+    if (a.y != c.y && b.y != c.y)
+      s.x =
+          inverse_lagrange_poly_fit({a, b, c})(0.0); // inverse quadratic interp
+    else
+      s.x = b.x - b.y * (b.x - a.x) / (b.y - a.y); // secant method
+
+    if (mflag = c1() || c2() || c3() || c4() || c5())
+      s.x = (a.x + b.x) / 2.0; // bisection
+
+    s.y = df(s.x);
+    d = c;
+    c = b;
+    if (a.y * s.y < 0.0)
+      b = s;
+    else
+      a = s;
+
+    if (abs(a.y) < abs(b.y))
+      std::swap(a, b);
+  }
+
+  return abs(b.y) < abs(s.y) ? b.x : s.x;
+}
+
 } // namespace algo_opt
