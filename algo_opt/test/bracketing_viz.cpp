@@ -10,12 +10,16 @@
 
 namespace ao = algo_opt;
 
-template <typename F, typename = std::enable_if<
-                          std::is_invocable_r<double, F, double>::value>>
-void bracket_viz(F f, const std::vector<std::vector<double>> &f_data,
-                 const std::vector<std::array<double, 2>> &brackets) {
+template <
+    typename F,
+    typename = std::enable_if<std::is_invocable_r<double, F, double>::value>>
+void bracket_viz(F f,
+                 const std::vector<std::vector<double>> &f_data,
+                 const std::vector<std::array<double, 2>> &brackets)
+{
   auto i = 0;
-  for (const auto &bracket : brackets) {
+  for (const auto &bracket : brackets)
+  {
     const auto &[a, b] = bracket;
     auto a_pt = std::tuple(a, f(a));
     auto b_pt = std::tuple(b, f(b));
@@ -27,13 +31,16 @@ void bracket_viz(F f, const std::vector<std::vector<double>> &f_data,
   }
 }
 
-template <typename F, typename = std::enable_if<
-                          std::is_invocable_r<double, F, double>::value>>
-void quadratic_fit_search_viz(
-    F f, const std::vector<std::vector<double>> &f_data,
-    const std::vector<ao::QuadraticFitSearchLog> &log) {
+template <
+    typename F,
+    typename = std::enable_if<std::is_invocable_r<double, F, double>::value>>
+void quadratic_fit_search_viz(F f,
+                              const std::vector<std::vector<double>> &f_data,
+                              const std::vector<ao::QuadraticFitSearchLog> &log)
+{
   auto i = 0;
-  for (const auto &log_i : log) {
+  for (const auto &log_i : log)
+  {
     const auto &[c0, c1, c2] = log_i.coefficients;
     auto curve_f = [&](double x) { return c0 + c1 * x + c2 * x * x; };
     auto curve = std::vector<std::vector<double>>();
@@ -54,7 +61,8 @@ void quadratic_fit_search_viz(
   }
 }
 
-int main(int, char **) {
+int main(int, char **)
+{
   auto w = 2.0 * M_PI * 0.05;
   auto A = 10.0;
   auto f = [&w, &A](double x) { return A * -cos(w * x); };
@@ -93,5 +101,5 @@ int main(int, char **) {
     ao::bisection(df, bracket, eps, &brackets);
     bracket_viz(f, f_data, brackets);
   }
-  return 1;
+  return 0;
 }

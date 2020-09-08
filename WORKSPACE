@@ -1,7 +1,7 @@
-workspace(name = "sandbox")
+workspace(name = "lab")
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository", "new_git_repository")
 
 # boost
 git_repository(
@@ -30,4 +30,13 @@ http_archive(
     sha256 = "671df031cf24cb8623a8dd52e4c22ddedaf495633168debce86b39d1a3a99505",
     strip_prefix = "gnuplot-iostream-master",
     urls = ["https://github.com/dstahlke/gnuplot-iostream/archive/master.zip"],
+)
+
+# eigen
+new_git_repository(
+    name = "eigen",
+    build_file = "@//third_party:eigen.BUILD",
+    commit = "21ae2afd4edaa1b69782c67a54182d34efe43f9c",  # tag 3.3.7
+    remote = "https://gitlab.com/libeigen/eigen",
+    shallow_since = "1544551075 +0100",
 )

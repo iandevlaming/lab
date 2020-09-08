@@ -16,6 +16,17 @@ cc_library(
     strip_include_prefix = "include",
 )
 
+cc_library(
+    name = "local_descent_cc",
+    hdrs = ["include/algo_opt/local_descent.hpp"],
+    copts = copts,
+    strip_include_prefix = "include",
+    deps = [
+        ":bracketing_cc",
+        "@eigen//:eigen-lib",
+    ],
+)
+
 # tests
 cc_test(
     name = "bracketing_test",
@@ -29,12 +40,23 @@ cc_test(
 
 # viz tests
 cc_binary(
-    name = "bracketing_viz_cc",
+    name = "bracketing_viz",
     srcs = ["test/bracketing_viz.cpp"],
     copts = copts,
     deps = [
         ":bracketing_cc",
         "@boost//:tuple",
+        "@gnuplot-iostream//:gnuplot-iostream-lib",
+    ],
+)
+
+cc_binary(
+    name = "local_descent_viz",
+    srcs = ["test/local_descent_viz.cpp"],
+    copts = copts,
+    deps = [
+        ":local_descent_cc",
+        "@eigen//:eigen-lib",
         "@gnuplot-iostream//:gnuplot-iostream-lib",
     ],
 )
