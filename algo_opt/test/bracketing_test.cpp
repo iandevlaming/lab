@@ -55,7 +55,7 @@ TEST_F(BracketingTest, fibonacci_search_simple)
 
 TEST_F(BracketingTest, quadratic_fit_search_sorted_output)
 {
-  auto bracket = std::array<double, 3>({1.0, 0.3, -1.0});
+  auto bracket = ao::bracket_t<3>({1.0, 0.3, -1.0});
   auto n = 3;
   auto fit_bracket = ao::quadratic_fit_search(f_, bracket, n);
 
@@ -65,7 +65,7 @@ TEST_F(BracketingTest, quadratic_fit_search_sorted_output)
 
 TEST_F(BracketingTest, quadratic_fit_search_simple)
 {
-  auto bracket = std::array<double, 3>({1.0, 0.3, -1.0});
+  auto bracket = ao::bracket_t<3>({1.0, 0.3, -1.0});
   auto n = 3;
 
   auto fit_bracket = ao::quadratic_fit_search(f_, bracket, n);
@@ -74,7 +74,7 @@ TEST_F(BracketingTest, quadratic_fit_search_simple)
 
 TEST_F(BracketingTest, quadratic_fit_search_tighten)
 {
-  auto bracket = std::array<double, 3>({1.0, 0.3, -1.0});
+  auto bracket = ao::bracket_t<3>({1.0, 0.3, -1.0});
   auto small_n = 3;
   auto big_n = small_n * 2;
 
@@ -87,7 +87,7 @@ TEST_F(BracketingTest, quadratic_fit_search_tighten)
 
 TEST_F(BracketingTest, bisection_simple)
 {
-  auto bracket = std::array<double, 2>({-2.0, 1.0});
+  auto bracket = ao::bracket_t<2>({-2.0, 1.0});
   auto eps = 0.001;
 
   auto [a, b] = ao::bisection(df_, bracket, eps);
@@ -95,6 +95,41 @@ TEST_F(BracketingTest, bisection_simple)
   EXPECT_LE(a, x_min_);
   EXPECT_GE(b, x_min_);
   EXPECT_LT(b - a, eps);
+}
+
+TEST_F(BracketingTest, secant_min_simple)
+{
+  auto bracket = ao::bracket_t<2>({2.0, -1.0});
+  auto eps = 0.001;
+
+  auto x = ao::secant_min(df_, bracket, eps);
+
+  EXPECT_LT(x - x_min_, eps);
+}
+
+TEST(FitTest, lagrange_poly_fit_simple)
+{
+  auto f = [](double x) { return x * x; };
+  auto x = std::vector<double>({-1.0, 0.0, 1.0});
+  auto points = std::vector<ao::Point2d>();
+  for (const auto &xi : x)
+    points.push_back({xi, f(xi)});
+
+  auto f_fit = ao::lagrange_poly_fit(points);
+
+  // the fit should be exactly f
+  for (double xi = x.front(); xi < x.back(); xi += 0.1)
+    EXPECT_NEAR(f_fit(xi), f(xi), 1e-12);
+}
+
+TEST_F(BracketingTest, brent_min_simple)
+{
+  auto bracket = ao::bracket_t<2>({2.0, -1.0});
+  auto eps = 0.001;
+
+  auto x = ao::brent_min(df_, bracket, eps);
+
+  EXPECT_LT(x - x_min_, eps);
 }
 
 int main(int argc, char **argv)

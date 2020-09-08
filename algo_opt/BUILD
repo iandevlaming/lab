@@ -29,7 +29,7 @@ cc_test(
 
 # viz tests
 cc_binary(
-    name = "bracketing_viz_cc",
+    name = "bracketing_viz",
     srcs = ["test/bracketing_viz.cpp"],
     copts = copts,
     deps = [
