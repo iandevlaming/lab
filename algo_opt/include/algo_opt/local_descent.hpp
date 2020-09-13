@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algo_opt/alias.hpp>
 #include <algo_opt/bracketing.hpp>
 
 #include <Eigen/Core>
@@ -11,25 +12,6 @@
 
 namespace algo_opt
 {
-// Jesus Christ
-template <int N>
-using multivar_f_t = std::function<double(Eigen::Matrix<double, N, 1>)>;
-template <int N>
-using multivar_grad_t =
-    std::function<Eigen::Matrix<double, N, 1>(Eigen::Matrix<double, N, 1>)>;
-
-template <typename F, int N>
-using is_multivar_f =
-    std::is_invocable_r<double, F, Eigen::Matrix<double, N, 1>>;
-template <typename G, int N>
-using is_multivar_grad = std::
-    is_invocable_r<Eigen::Matrix<double, N, 1>, G, Eigen::Matrix<double, N, 1>>;
-
-using binary_f_t = multivar_f_t<2>;
-using binary_grad_t = multivar_grad_t<2>;
-using binary_level_t =
-    std::function<std::optional<std::array<double, 2>>(double, double)>;
-
 binary_f_t makeRosenbrock(double a = 1, double b = 100)
 {
   // f = (a - x)^2 + b * (y - x^2)^2
@@ -70,22 +52,28 @@ binary_level_t makeLevelRosenbrock(double a = 1, double b = 100)
 }
 
 template <typename F,
-          typename X,
-          typename = std::enable_if_t<std::is_invocable_r_v<double, F, X>>>
-double line_search(F f, F df, X x, X d)
+          typename G,
+          int N,
+          typename = enable_if_multivar_f<F, N>::type,
+          typename = enable_if_multivar_grad<G, N>::type>
+Vectord<N> line_search(F f,
+                       G df,
+                       const Vectord<N> &x,
+                       const Vectord<N> &d,
+                       double eps = 1e-4)
 {
   auto f_alpha = [&](double alpha) { return f(x + alpha * d); };
-  auto df_alpha = [&](double alpha) { return d * df(x + alpha * d); };
+  auto df_alpha = [&](double alpha) { return df(x + alpha * d).dot(d); };
   auto bracket = bracket_minimum(f_alpha);
-  auto alpha = brent_min(df_alpha, bracket);
+  auto alpha = brent_min(df_alpha, bracket, eps);
   return x + alpha * d;
 }
 
 template <typename F,
           typename G,
           int N,
-          typename = std::enable_if_t<is_multivar_f<F, N>::value &&
-                                      is_multivar_grad<G, N>::value>>
+          typename = enable_if_multivar_f<F, N>::type,
+          typename = enable_if_multivar_grad<G, N>::type>
 Eigen::Matrix<double, N, 1>
 backtracking_line_search(F f,
                          G df,
