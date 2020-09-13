@@ -10,6 +10,13 @@ copts = [
 
 # libraries
 cc_library(
+    name = "alias_cc",
+    hdrs = ["include/algo_opt/alias.hpp"],
+    copts = copts,
+    strip_include_prefix = "include",
+)
+
+cc_library(
     name = "bracketing_cc",
     hdrs = ["include/algo_opt/bracketing.hpp"],
     copts = copts,
@@ -22,6 +29,7 @@ cc_library(
     copts = copts,
     strip_include_prefix = "include",
     deps = [
+        ":alias_cc",
         ":bracketing_cc",
         "@eigen//:eigen-lib",
     ],
