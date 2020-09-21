@@ -15,7 +15,7 @@ namespace algo_opt
 binary_f_t makeRosenbrock(double a = 1, double b = 100)
 {
   // f = (a - x)^2 + b * (y - x^2)^2
-  return [a, b](const Eigen::Vector2d &pt) {
+  return [a, b](const Vectord<2> &pt) {
     const auto &x = pt(0);
     const auto &y = pt(1);
     return std::pow((a - x), 2) + b * std::pow((y - x * x), 2);
@@ -28,13 +28,35 @@ binary_grad_t makeGradRosenbrock(double a = 1, double b = 100)
 {
   // df/dx = -2 * (a - x) - 4 * x * b * (y - x^2)
   // df/dy = 2 * b * (y - x^2)
-  return [a, b](const Eigen::Vector2d &pt) -> Eigen::Vector2d {
+  return [a, b](const Vectord<2> &pt) -> Vectord<2> {
     const auto &x = pt(0);
     const auto &y = pt(1);
     const auto dfdx = -2.0 * (a - x) - 4.0 * x * b * (y - x * x);
     const auto dfdy = 2.0 * b * (y - x * x);
-    Eigen::Vector2d grad(dfdx, dfdy);
+    Vectord<2> grad(dfdx, dfdy);
     return grad;
+  };
+}
+
+binary_hess_t makeHessRosenbrock(double a = 1, double b = 100)
+{
+  // d2f/dx2 = 2 - 4 * b * y + 12 * b * x^2
+  // d2f/dxdy = -4 * b * x
+  // d2f/dy2 = -4 * b * x
+  // d2f/dydx = 2b
+  return [a, b](const Vectord<2> &pt) -> Matrixd<2> {
+    const auto &x = pt(0);
+    const auto &y = pt(1);
+    const auto d2fdx2 = 2.0 - 4.0 * b * y + 12.0 * b * x * x;
+    const auto d2fdxdy = -4.0 * b * x;
+    const auto d2fdydx = -4.0 * b * x;
+    const auto d2fdy2 = 2.0 * b;
+    // clang-format off
+    Matrixd<2> hess;
+    hess << d2fdx2,  d2fdxdy,
+            d2fdydx, d2fdy2;
+    // clang-format on
+    return hess;
   };
 }
 

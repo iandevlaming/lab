@@ -57,7 +57,6 @@ void rosenbrock_viz(gio::PlotGroup *plots,
   }
 }
 
-// should be an invocable check here for step
 template <typename P>
 void step_viz(gio::PlotGroup *plots,
               ao::binary_f_t f,
@@ -110,7 +109,11 @@ int main(int, char **)
   // auto params = ao::descent::RMSPropParams<2>();
   // auto params = ao::descent::AdadeltaParams<2>();
   // auto params = ao::descent::AdamParams<2>();
-  auto params = ao::descent::HyperGradientDescentParams<2>();
+  // auto params = ao::descent::HyperGradientDescentParams<2>();
+  // auto params = ao::descent::DFPParams<2>();
+  // auto params = ao::descent::BFGSParams<2>();
+  auto params = ao::descent::LimitedMemoryBFGSParams<2>();
+  params.m_max = 3;
   step_viz(&plots, f, df, xi, params, 10, true);
 
   gp << "set xrange [" << x_lim[0] << ":" << x_lim[1] << "]\n";

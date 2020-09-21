@@ -4,7 +4,8 @@
 #include <algo_opt/local_descent.hpp>
 
 #include <algorithm>
-#include <iostream>
+#include <vector>
+
 namespace algo_opt
 {
 namespace descent
@@ -165,6 +166,39 @@ struct HyperGradientDescentParams
   double alpha{0.01};
   double mu{1e-6};
   Vectord<N> g;
+};
+
+template <int N>
+struct DFPParams
+{
+  DFPParams() { q = Matrixd<N>::Identity(); }
+  DFPParams(const Matrixd<N> &q_in) : q(q_in) {}
+  Matrixd<N> q;
+};
+
+template <int N>
+struct BFGSParams
+{
+  BFGSParams() { q = Matrixd<N>::Identity(); }
+  BFGSParams(const Matrixd<N> &q_in) : q(q_in) {}
+  Matrixd<N> q;
+};
+
+template <int N>
+struct LimitedMemoryBFGSParams
+{
+  LimitedMemoryBFGSParams() = default;
+  LimitedMemoryBFGSParams(unsigned int m_max_in,
+                          const std::vector<Vectord<N>> &delta_s_in,
+                          const std::vector<Vectord<N>> &gamma_s_in,
+                          const std::vector<Vectord<N>> &q_s_in)
+      : m_max(m_max_in), delta_s(delta_s_in), gamma_s(gamma_s_in), q_s(q_s_in)
+  {
+  }
+  unsigned int m_max{0};
+  std::vector<Vectord<N>> delta_s;
+  std::vector<Vectord<N>> gamma_s;
+  std::vector<Vectord<N>> q_s;
 };
 
 // we can use dispatch if we match function interfaces, but the interface for
@@ -336,12 +370,100 @@ struct Descent
 
     Vectord<N> gi = g(x);
     alpha += mu * gi.dot(g_prev);
-    std::cout << alpha << std::endl;
-    for (unsigned int i = 0; i < N; ++i)
-      std::cout << gi(i) << std::endl;
 
     auto new_params = HyperGradientDescentParams<N>(alpha, mu, gi);
     return {x - alpha * gi, new_params};
+  }
+
+  static std::tuple<Vectord<N>, DFPParams<N>>
+  step(const DFPParams<N> &params, F f, G g, const Vectord<N> &x)
+  {
+    Matrixd<N> q = params.q;
+
+    Vectord<N> gi = g(x);
+    Vectord<N> d = -q * gi;
+    Vectord<N> xn = line_search(f, g, x, d);
+    Vectord<N> gn = g(xn);
+    Vectord<N> delta = xn - x;
+    Vectord<N> gamma = gn - gi;
+    q -= (q * gamma * gamma.transpose() * q) / (gamma.transpose() * q * gamma);
+    q += (delta * delta.transpose()) / (delta.transpose() * gamma);
+
+    auto new_params = DFPParams(q);
+    return {xn, new_params};
+  }
+
+  static std::tuple<Vectord<N>, BFGSParams<N>>
+  step(const BFGSParams<N> &params, F f, G g, const Vectord<N> &x)
+  {
+    Matrixd<N> q = params.q;
+
+    Vectord<N> gi = g(x);
+    Vectord<N> d = -q * gi;
+    Vectord<N> xn = line_search(f, g, x, d);
+    Vectord<N> gn = g(xn);
+    Vectord<N> delta = xn - x;
+    Vectord<N> gamma = gn - gi;
+    q -= (delta * gamma.transpose() * q + q * gamma * delta.transpose()) /
+         (delta.transpose() * gamma);
+    q += (1.0 +
+          (gamma.transpose() * q * gamma)(0) / (delta.transpose() * gamma)) *
+         (delta * delta.transpose()) / (delta.transpose() * gamma);
+
+    auto new_params = BFGSParams(q);
+    return {xn, new_params};
+  }
+
+  static std::tuple<Vectord<N>, LimitedMemoryBFGSParams<N>>
+  step(const LimitedMemoryBFGSParams<N> &params, F f, G g, const Vectord<N> &x)
+  {
+    std::vector<Vectord<N>> delta_s = params.delta_s;
+    std::vector<Vectord<N>> gamma_s = params.gamma_s;
+    std::vector<Vectord<N>> q_s = params.q_s;
+    auto m_max = params.m_max;
+
+    Vectord<N> d = Vectord<N>::Zero();
+    Vectord<N> xn = Vectord<N>::Zero();
+    Vectord<N> gi = g(x);
+    auto m = static_cast<int>(delta_s.size());
+
+    if (m > 0)
+    {
+      Vectord<N> q = gi;
+      for (auto i = m - 1; i >= 0; --i)
+      {
+        q_s[i] = q;
+        q -= (delta_s[i].dot(q)) / (gamma_s[i].dot(delta_s[i])) * gamma_s[i];
+      }
+
+      Vectord<N> z =
+          (gamma_s.back().cwiseProduct(delta_s.back()).cwiseProduct(q)) /
+          (gamma_s.back().dot(gamma_s.back()));
+      for (auto i = 0; i < m; ++i)
+        z += delta_s[i] * (delta_s[i].dot(q_s[i]) - gamma_s[i].dot(z)) /
+             (gamma_s[i].dot(delta_s[i]));
+      d = -1.0 * z;
+    }
+    else
+    {
+      d = -1.0 * gi;
+    }
+
+    xn = line_search(f, g, x, d);
+    Vectord<N> gn = g(xn);
+
+    delta_s.push_back(xn - x);
+    gamma_s.push_back(gn - gi);
+    q_s.push_back(Vectord<N>::Zero());
+
+    auto n_remove =
+        std::max(static_cast<int>(delta_s.size()) - static_cast<int>(m_max), 0);
+    delta_s.erase(delta_s.begin(), delta_s.begin() + n_remove);
+    gamma_s.erase(gamma_s.begin(), gamma_s.begin() + n_remove);
+    q_s.erase(q_s.begin(), q_s.begin() + n_remove);
+
+    auto new_params = LimitedMemoryBFGSParams<N>(m_max, delta_s, gamma_s, q_s);
+    return {xn, new_params};
   }
 };
 
