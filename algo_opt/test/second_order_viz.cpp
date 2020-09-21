@@ -1,4 +1,5 @@
-#include <algo_opt/first_order.hpp>
+#include <algo_opt/local_descent.hpp>
+#include <algo_opt/second_order.hpp>
 
 #include <boost/tuple/tuple.hpp>
 #include <gnuplot-iostream/gnuplot-iostream.h>
@@ -57,14 +58,14 @@ void rosenbrock_viz(gio::PlotGroup *plots,
   }
 }
 
-template <typename P>
-void step_viz(gio::PlotGroup *plots,
-              ao::binary_f_t f,
-              ao::binary_grad_t g,
-              const ao::Vectord<2> &x0,
-              P params,
-              unsigned int n = 10,
-              bool print = false)
+void newton_step_viz(gio::PlotGroup *plots,
+                     ao::binary_grad_t g,
+                     ao::binary_hess_t h,
+                     const ao::Vectord<2> &x0,
+                     double eps = 1e-4,
+                     unsigned int k_max = 100,
+                     unsigned int n = 10,
+                     bool print = false)
 {
   ao::Vectord<2> xi = x0;
   auto points = point_vec_2d_t();
@@ -72,7 +73,7 @@ void step_viz(gio::PlotGroup *plots,
 
   for (unsigned int i = 0; i < n; ++i)
   {
-    std::tie(xi, params) = ao::descent::step(params, f, g, xi);
+    xi = ao::descent::newton_step(g, h, xi, eps, k_max);
     points.emplace_back(xi(0), xi(1));
     if (print)
       std::cout << "[" << xi(0) << ", " << xi(1) << "]" << std::endl;
@@ -92,29 +93,14 @@ int main(int, char **)
       std::vector<double>({0.1, 0.5, 1, 2, 4, 8, 16, 32, 64, 128, 256});
   const auto d = 0.001;
   const auto a = 1.0;
-  const auto b = 10.0;
+  const auto b = 100.0;
   rosenbrock_viz(&plots, x_lim, y_lim, levels, d, a, b);
 
-  auto f = ao::makeRosenbrock(a, b);
-  auto df = ao::makeGradRosenbrock(a, b);
-  Eigen::Vector2d xi(-1.5, -1.5);
-  // auto params = ao::descent::GradientDescentParams(0.10);
-  // auto params = ao::descent::GradientDescentOptParams(0.0001);
-  // auto params = ao::descent::ConjugateGradientDescentParams(df, xi);
-  // auto params = ao::descent::MomentumParams<2>();
-  // auto params = ao::descent::NesterovMomentumParams<2>();
-  // params.alpha = 0.01;
-  // params.beta = 1.0;
-  // auto params = ao::descent::AdagradParams<2>();
-  // auto params = ao::descent::RMSPropParams<2>();
-  // auto params = ao::descent::AdadeltaParams<2>();
-  // auto params = ao::descent::AdamParams<2>();
-  // auto params = ao::descent::HyperGradientDescentParams<2>();
-  // auto params = ao::descent::DFPParams<2>();
-  // auto params = ao::descent::BFGSParams<2>();
-  auto params = ao::descent::LimitedMemoryBFGSParams<2>();
-  params.m_max = 3;
-  step_viz(&plots, f, df, xi, params, 10, true);
+  auto g = ao::makeGradRosenbrock(a, b);
+  auto h = ao::makeHessRosenbrock(a, b);
+  Eigen::Vector2d xi(0.0, 1.5);
+  // not a good method for rosenbrock
+  newton_step_viz(&plots, g, h, xi, 0.01, 100, 10, true);
 
   gp << "set xrange [" << x_lim[0] << ":" << x_lim[1] << "]\n";
   gp << "set yrange [" << y_lim[0] << ":" << y_lim[1] << "]\n";
