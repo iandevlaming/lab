@@ -49,6 +49,17 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "second_order_cc",
+    hdrs = ["include/algo_opt/second_order.hpp"],
+    copts = copts,
+    strip_include_prefix = "include",
+    deps = [
+        ":alias_cc",
+        "@eigen//:eigen-lib",
+    ],
+)
+
 # tests
 cc_test(
     name = "bracketing_test",
@@ -90,6 +101,18 @@ cc_binary(
     deps = [
         ":alias_cc",
         ":first_order_cc",
+        "@gnuplot-iostream//:gnuplot-iostream-lib",
+    ],
+)
+
+cc_binary(
+    name = "second_order_viz",
+    srcs = ["test/second_order_viz.cpp"],
+    copts = copts,
+    deps = [
+        ":alias_cc",
+        ":local_descent_cc",
+        ":second_order_cc",
         "@gnuplot-iostream//:gnuplot-iostream-lib",
     ],
 )
