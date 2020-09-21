@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algo_opt/alias.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -12,21 +14,7 @@
 
 namespace algo_opt
 {
-template <int N>
-using bracket_t = std::array<double, N>;
-using unary_f_t = std::function<double(double)>;
-
-template <typename F>
-using enable_if_1d_function =
-    std::enable_if_t<std::is_invocable_r_v<double, F, double>>;
-
-struct Point2d
-{
-  double x;
-  double y;
-};
-
-template <typename F, typename = enable_if_1d_function<F>>
+template <typename F, typename = enable_if_unary_f<F>::type>
 bracket_t<2> bracket_minimum(F f,
                              double x = 0.0,
                              double s = 0.01,
@@ -65,7 +53,7 @@ bracket_t<2> bracket_minimum(F f,
   return bracket;
 }
 
-template <typename F, typename = enable_if_1d_function<F>>
+template <typename F, typename = enable_if_unary_f<F>::type>
 bracket_t<2>
 fibonacci_search(F f, bracket_t<2> bracket, unsigned int n, double eps = 0.01)
 {
@@ -108,7 +96,7 @@ fibonacci_search(F f, bracket_t<2> bracket, unsigned int n, double eps = 0.01)
   return bracket;
 }
 
-template <typename F, typename = enable_if_1d_function<F>>
+template <typename F, typename = enable_if_unary_f<F>::type>
 bracket_t<2> golden_section_search(F f, bracket_t<2> bracket, unsigned int n)
 {
   auto &[a, b] = bracket;
@@ -146,7 +134,7 @@ struct QuadraticFitSearchLog
   bracket_t<3> bracket;
 };
 
-template <typename F, typename = enable_if_1d_function<F>>
+template <typename F, typename = enable_if_unary_f<F>::type>
 bracket_t<3>
 quadratic_fit_search(F f,
                      bracket_t<3> bracket,
@@ -228,7 +216,7 @@ quadratic_fit_search(F f,
   return bracket;
 }
 
-template <typename F, typename = enable_if_1d_function<F>>
+template <typename F, typename = enable_if_unary_f<F>::type>
 bracket_t<2> bisection(F df,
                        bracket_t<2> bracket,
                        double eps,
@@ -271,7 +259,7 @@ bracket_t<2> bisection(F df,
 
 // obviously, in production-grade code, you'd need additional termination
 // guarantees
-template <typename F, typename = enable_if_1d_function<F>>
+template <typename F, typename = enable_if_unary_f<F>::type>
 double bisection_min(F df, bracket_t<2> bracket, double eps)
 {
   eps = abs(eps);
@@ -279,7 +267,7 @@ double bisection_min(F df, bracket_t<2> bracket, double eps)
   return abs(df(bracket[0])) < abs(df(bracket[1])) ? bracket[0] : bracket[1];
 }
 
-template <typename F, typename = enable_if_1d_function<F>>
+template <typename F, typename = enable_if_unary_f<F>::type>
 double secant_min(F df, bracket_t<2> bracket, double eps)
 {
   eps = abs(eps);
@@ -347,7 +335,7 @@ unary_f_t inverse_lagrange_poly_fit(const std::vector<Point2d> &points)
 /**
  * @see https://en.wikipedia.org/wiki/Brent%27s_method
  */
-template <typename F, typename = enable_if_1d_function<F>>
+template <typename F, typename = enable_if_unary_f<F>::type>
 double brent_min(F df, const bracket_t<2> &bracket, double eps)
 {
   eps = abs(eps);

@@ -21,6 +21,9 @@ cc_library(
     hdrs = ["include/algo_opt/bracketing.hpp"],
     copts = copts,
     strip_include_prefix = "include",
+    deps = [
+        ":alias_cc",
+    ],
 )
 
 cc_library(
