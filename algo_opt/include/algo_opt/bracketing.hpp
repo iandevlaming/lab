@@ -7,6 +7,8 @@
 #include <cassert>
 #include <cmath>
 #include <functional>
+#include <iostream>
+#include <limits>
 #include <math.h>
 #include <string>
 #include <type_traits>
@@ -32,6 +34,7 @@ bracket_t<2> bracket_minimum(F f,
   }
 
   auto c = Point2d();
+  auto stuck_counter = 0;
   while (1)
   {
     x = b.x + s;
@@ -39,6 +42,14 @@ bracket_t<2> bracket_minimum(F f,
 
     if (log)
       log->push_back({a.x, c.x});
+
+    stuck_counter = (c.y != b.y) ? 0 : stuck_counter + 1;
+    if (stuck_counter > 100)
+    {
+      std::cout << "WARNING: bracketing is stuck - terminating search"
+                << std::endl;
+      break;
+    }
 
     if (c.y > b.y)
       break;
@@ -341,7 +352,7 @@ double brent_min(F df, const bracket_t<2> &bracket, double eps)
   eps = abs(eps);
   auto a = Point2d({bracket[0], df(bracket[0])});
   auto b = Point2d({bracket[1], df(bracket[1])});
-  assert(a.y * b.y < 0.0); // function must be bracketed
+  assert(a.y * b.y <= 0.0); // function must be bracketed
 
   if (abs(a.y) < abs(b.y))
     std::swap(a, b); // b should be our best guess so far
@@ -361,7 +372,9 @@ double brent_min(F df, const bracket_t<2> &bracket, double eps)
   auto c4 = [&]() { return mflag && abs(b.x - c.x) < eps; };
   auto c5 = [&]() { return !mflag && abs(c.x - d.x) < eps; };
 
-  while (abs(b.x - a.x) > eps) // original algo also checks f(b) or f(s) == 0
+  while (abs(b.x - a.x) > eps &&
+         abs(b.y) > std::numeric_limits<double>::epsilon() &&
+         abs(s.y) > std::numeric_limits<double>::epsilon())
   {
     if (a.y != c.y && b.y != c.y)
       s.x =

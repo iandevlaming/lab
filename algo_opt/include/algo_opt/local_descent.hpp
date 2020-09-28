@@ -73,6 +73,21 @@ binary_level_t makeLevelRosenbrock(double a = 1, double b = 100)
   };
 }
 
+template <typename F, int N, typename = enable_if_multivar_f<F, N>::type>
+Vectord<N> central_diff(F f, const Vectord<N> &x, double h = 1e-4)
+{
+  Vectord<N> df = Vectord<N>::Zero();
+  for (unsigned int i = 0; i < N; ++i)
+  {
+    Vectord<N> xa = x;
+    xa(i) += h / 2.0;
+    Vectord<N> xb = x;
+    xb(i) -= h / 2.0;
+    df(i) = (f(xa) - f(xb)) / h;
+  }
+  return df;
+}
+
 template <typename F,
           typename G,
           int N,
@@ -86,6 +101,21 @@ Vectord<N> line_search(F f,
 {
   auto f_alpha = [&](double alpha) { return f(x + alpha * d); };
   auto df_alpha = [&](double alpha) { return df(x + alpha * d).dot(d); };
+  auto bracket = bracket_minimum(f_alpha);
+  auto alpha = brent_min(df_alpha, bracket, eps);
+  return x + alpha * d;
+}
+
+template <typename F, int N, typename = enable_if_multivar_f<F, N>::type>
+Vectord<N>
+line_search(F f, const Vectord<N> &x, const Vectord<N> &d, double eps = 1e-4)
+{
+  auto f_alpha = [&](double alpha) { return f(x + alpha * d); };
+  auto df_alpha = [&](double alpha) {
+    Vectord<N> xn = x + alpha * d;
+    Vectord<N> df = central_diff(f, xn, eps);
+    return df.dot(d);
+  };
   auto bracket = bracket_minimum(f_alpha);
   auto alpha = brent_min(df_alpha, bracket, eps);
   return x + alpha * d;
