@@ -74,7 +74,7 @@ binary_level_t makeLevelRosenbrock(double a = 1, double b = 100)
 }
 
 template <typename F, int N, typename = enable_if_multivar_f<F, N>::type>
-Vectord<N> central_diff(F f, const Vectord<N> &x, double h)
+Vectord<N> central_diff(F f, const Vectord<N> &x, double h = 1e-4)
 {
   Vectord<N> df = Vectord<N>::Zero();
   for (unsigned int i = 0; i < N; ++i)
