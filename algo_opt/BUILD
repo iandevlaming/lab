@@ -60,6 +60,18 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "direct_methods_cc",
+    hdrs = ["include/algo_opt/direct_methods.hpp"],
+    copts = copts,
+    strip_include_prefix = "include",
+    deps = [
+        ":alias_cc",
+        ":local_descent_cc",
+        "@eigen//:eigen-lib",
+    ],
+)
+
 # tests
 cc_test(
     name = "bracketing_test",
@@ -113,6 +125,18 @@ cc_binary(
         ":alias_cc",
         ":local_descent_cc",
         ":second_order_cc",
+        "@gnuplot-iostream//:gnuplot-iostream-lib",
+    ],
+)
+
+cc_binary(
+    name = "direct_methods_viz",
+    srcs = ["test/direct_methods_viz.cpp"],
+    copts = copts,
+    deps = [
+        ":alias_cc",
+        ":direct_methods_cc",
+        ":local_descent_cc",
         "@gnuplot-iostream//:gnuplot-iostream-lib",
     ],
 )
