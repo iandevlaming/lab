@@ -187,18 +187,26 @@ struct BFGSParams
 template <int N>
 struct LimitedMemoryBFGSParams
 {
-  LimitedMemoryBFGSParams() = default;
-  LimitedMemoryBFGSParams(unsigned int m_max_in,
-                          const std::vector<Vectord<N>> &delta_s_in,
-                          const std::vector<Vectord<N>> &gamma_s_in,
-                          const std::vector<Vectord<N>> &q_s_in)
-      : m_max(m_max_in), delta_s(delta_s_in), gamma_s(gamma_s_in), q_s(q_s_in)
-  {
-  }
   unsigned int m_max{0};
   std::vector<Vectord<N>> delta_s;
   std::vector<Vectord<N>> gamma_s;
   std::vector<Vectord<N>> q_s;
+};
+
+template <typename S, typename P, typename = enable_if_unary_f<S>::type>
+struct NoisyDescentParams
+{
+  NoisyDescentParams()
+  {
+    sigma = [](const auto &ki) { return 1.0 / ki; };
+  }
+  NoisyDescentParams(const P &params_in, const S &sigma_in, unsigned int k_in)
+      : descent_params(params_in), sigma(sigma_in), k(k_in)
+  {
+  }
+  P descent_params;
+  S sigma;
+  unsigned int k = 1;
 };
 
 // we can use dispatch if we match function interfaces, but the interface for
@@ -463,6 +471,24 @@ struct Descent
     q_s.erase(q_s.begin(), q_s.begin() + n_remove);
 
     auto new_params = LimitedMemoryBFGSParams<N>(m_max, delta_s, gamma_s, q_s);
+    return {xn, new_params};
+  }
+
+  template <typename S, typename P>
+  static std::tuple<Vectord<N>, NoisyDescentParams<S, P>>
+  step(const NoisyDescentParams<S, P> &params, F f, G g, const Vectord<N> &x)
+  {
+    const auto &descent_params = params.descent_params;
+    const auto &sigma = params.sigma;
+    const auto &k = params.k;
+
+    Vectord<N> xn;
+    P new_descent_params;
+    std::tie(xn, new_descent_params) =
+        Descent<F, G, N>::step(descent_params, f, g, x);
+    xn += sigma(k) * Vectord<N>::Random();
+
+    auto new_params = NoisyDescentParams(new_descent_params, sigma, k + 1);
     return {xn, new_params};
   }
 };
