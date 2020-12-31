@@ -14,6 +14,9 @@ cc_library(
     hdrs = ["include/algo_opt/alias.hpp"],
     copts = copts,
     strip_include_prefix = "include",
+    deps = [
+        "@eigen//:eigen-lib",
+    ],
 )
 
 cc_library(

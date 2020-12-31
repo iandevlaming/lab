@@ -9,8 +9,8 @@ namespace algo_opt
 // type alias templates
 template <int N>
 using Vectord = Eigen::Matrix<double, N, 1>;
-template <int N>
-using Matrixd = Eigen::Matrix<double, N, N>;
+template <int N, int M = N>
+using Matrixd = Eigen::Matrix<double, N, M>;
 
 // function alias templates
 template <int N>
@@ -60,3 +60,5 @@ struct Point2d
 };
 
 } // namespace algo_opt
+
+namespace ao = algo_opt;
