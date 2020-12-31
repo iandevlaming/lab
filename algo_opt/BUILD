@@ -14,6 +14,9 @@ cc_library(
     hdrs = ["include/algo_opt/alias.hpp"],
     copts = copts,
     strip_include_prefix = "include",
+    deps = [
+        "@eigen//:eigen-lib",
+    ],
 )
 
 cc_library(
@@ -83,6 +86,17 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "lco_cc",
+    hdrs = ["include/algo_opt/lco.hpp"],
+    copts = copts,
+    strip_include_prefix = "include",
+    deps = [
+        ":alias_cc",
+        "@eigen//:eigen-lib",
+    ],
+)
+
 # tests
 cc_test(
     name = "bracketing_test",
@@ -90,6 +104,16 @@ cc_test(
     copts = copts,
     deps = [
         ":bracketing_cc",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "lco_test",
+    srcs = ["test/lco_test.cpp"],
+    copts = copts,
+    deps = [
+        ":lco_cc",
         "@com_google_googletest//:gtest",
     ],
 )
