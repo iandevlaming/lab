@@ -36,7 +36,7 @@ http_archive(
 new_git_repository(
     name = "eigen",
     build_file = "@//third_party:eigen.BUILD",
-    commit = "21ae2afd4edaa1b69782c67a54182d34efe43f9c",  # tag 3.3.7
+    commit = "0fd6b4f71dd85b2009ee4d1aeb296e2c11fc9d68",  # tag = "3.3.9"
     remote = "https://gitlab.com/libeigen/eigen",
-    shallow_since = "1544551075 +0100",
+    shallow_since = "1607118821 +0100",
 )
