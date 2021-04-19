@@ -30,13 +30,13 @@ cc_library(
 )
 
 cc_library(
-    name = "local_descent_cc",
-    hdrs = ["include/algo_opt/local_descent.hpp"],
+    name = "direct_methods_cc",
+    hdrs = ["include/algo_opt/direct_methods.hpp"],
     copts = copts,
     strip_include_prefix = "include",
     deps = [
         ":alias_cc",
-        ":bracketing_cc",
+        ":local_descent_cc",
         "@eigen//:eigen-lib",
     ],
 )
@@ -53,8 +53,8 @@ cc_library(
 )
 
 cc_library(
-    name = "second_order_cc",
-    hdrs = ["include/algo_opt/second_order.hpp"],
+    name = "lco_cc",
+    hdrs = ["include/algo_opt/lco.hpp"],
     copts = copts,
     strip_include_prefix = "include",
     deps = [
@@ -64,13 +64,24 @@ cc_library(
 )
 
 cc_library(
-    name = "direct_methods_cc",
-    hdrs = ["include/algo_opt/direct_methods.hpp"],
+    name = "local_descent_cc",
+    hdrs = ["include/algo_opt/local_descent.hpp"],
     copts = copts,
     strip_include_prefix = "include",
     deps = [
         ":alias_cc",
-        ":local_descent_cc",
+        ":bracketing_cc",
+        "@eigen//:eigen-lib",
+    ],
+)
+
+cc_library(
+    name = "second_order_cc",
+    hdrs = ["include/algo_opt/second_order.hpp"],
+    copts = copts,
+    strip_include_prefix = "include",
+    deps = [
+        ":alias_cc",
         "@eigen//:eigen-lib",
     ],
 )
@@ -87,16 +98,16 @@ cc_library(
 )
 
 cc_library(
-    name = "lco_cc",
-    hdrs = ["include/algo_opt/lco.hpp"],
+    name = "test_functions_cc",
+    hdrs = ["include/algo_opt/test_functions.hpp"],
     copts = copts,
     strip_include_prefix = "include",
     deps = [
         ":alias_cc",
         "@eigen//:eigen-lib",
+        "@gnuplot-iostream//:gnuplot-iostream-lib",
     ],
 )
-
 # tests
 cc_test(
     name = "bracketing_test",
@@ -131,12 +142,14 @@ cc_binary(
 )
 
 cc_binary(
-    name = "local_descent_viz",
-    srcs = ["test/local_descent_viz.cpp"],
+    name = "direct_methods_viz",
+    srcs = ["test/direct_methods_viz.cpp"],
     copts = copts,
     deps = [
+        ":alias_cc",
+        ":direct_methods_cc",
         ":local_descent_cc",
-        "@eigen//:eigen-lib",
+        ":test_functions_cc",
         "@gnuplot-iostream//:gnuplot-iostream-lib",
     ],
 )
@@ -148,6 +161,19 @@ cc_binary(
     deps = [
         ":alias_cc",
         ":first_order_cc",
+        ":test_functions_cc",
+        "@gnuplot-iostream//:gnuplot-iostream-lib",
+    ],
+)
+
+cc_binary(
+    name = "local_descent_viz",
+    srcs = ["test/local_descent_viz.cpp"],
+    copts = copts,
+    deps = [
+        ":local_descent_cc",
+        ":test_functions_cc",
+        "@eigen//:eigen-lib",
         "@gnuplot-iostream//:gnuplot-iostream-lib",
     ],
 )
@@ -160,18 +186,7 @@ cc_binary(
         ":alias_cc",
         ":local_descent_cc",
         ":second_order_cc",
-        "@gnuplot-iostream//:gnuplot-iostream-lib",
-    ],
-)
-
-cc_binary(
-    name = "direct_methods_viz",
-    srcs = ["test/direct_methods_viz.cpp"],
-    copts = copts,
-    deps = [
-        ":alias_cc",
-        ":direct_methods_cc",
-        ":local_descent_cc",
+        ":test_functions_cc",
         "@gnuplot-iostream//:gnuplot-iostream-lib",
     ],
 )
@@ -184,6 +199,7 @@ cc_binary(
         ":alias_cc",
         ":local_descent_cc",
         ":stochastic_methods_cc",
+        ":test_functions_cc",
         "@gnuplot-iostream//:gnuplot-iostream-lib",
     ],
 )
