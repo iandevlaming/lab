@@ -4,6 +4,7 @@
 
 #include <gnuplot-iostream/gnuplot-iostream.h>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <optional>
@@ -73,8 +74,8 @@ binary_level_t make_level_rosenbrock(double a = 1, double b = 100)
 }
 
 void rosenbrock_viz(gnuplotio::PlotGroup *plots,
-                    ao::bracket_t<2> x_lim,
-                    ao::bracket_t<2> y_lim,
+                    bracket_t<2> x_lim,
+                    bracket_t<2> y_lim,
                     const std::vector<double> &levels,
                     double d = 0.1,
                     double a = 1,
@@ -86,7 +87,7 @@ void rosenbrock_viz(gnuplotio::PlotGroup *plots,
   while (x.back() < x_lim[1])
     x.push_back(x.back() + d);
 
-  auto f_level = ao::make_level_rosenbrock(a, b);
+  auto f_level = make_level_rosenbrock(a, b);
   auto get_level_points = [&](auto &lower, auto &upper, const auto &li) {
     return [&](const auto &xi) {
       auto yi = f_level(xi, li);
@@ -114,4 +115,113 @@ void rosenbrock_viz(gnuplotio::PlotGroup *plots,
   }
 }
 
+binary_f_t make_flower(double a = 1.0, double b = 1.0, double c = 4.0)
+{
+  // f = a * sqrt(x^2 + y^2) + b * sin(c * atan2(y, x))
+  return [a, b, c](const Vectord<2> &pt) {
+    return a * pt.norm() + b * sin(c * atan2(pt(1), pt(0)));
+  };
+}
+
+binary_grad_t make_grad_flower(double a = 1.0, double b = 1.0, double c = 4.0)
+{
+  // df/dx = a * x / sqrt(x^2 + y^2) + b * c * cos(c * atan2(y, x)) * [-y / (x^2 + y^2)]
+  // df/dy = a * y / sqrt(x^2 + y^2) + b * c * cos(c * atan2(y, x)) * [x / (x^2 + y^2)]
+  return [a, b, c](const Vectord<2> &pt) -> Vectord<2> {
+    const auto &x = pt(0);
+    const auto &y = pt(1);
+
+    const auto norm_sq = pt.squaredNorm();
+    const auto norm = std::sqrt(norm_sq);
+
+    const auto d = a / norm;
+    const auto e = b * c * cos(c * atan2(y, x)) / norm_sq;
+
+    const auto dfdx = d * x - e * y;
+    const auto dfdy = d * y + e * x;
+    Vectord<2> grad(dfdx, dfdy);
+    return grad;
+  };
+}
+
+binary_hess_t make_hess_flower(double a = 1.0, double b = 1.0, double c = 4.0)
+{
+  // d2f/dx2 = a * [1 - x^2 / (x^2 + y^2)] / sqrt(x^2 + y^2) + b * c * y * [2 * x * cos(c * atan2(y, x)) - c * y * sin(c * atan2(y, x))] / (x^2 + y^2)^2
+  // d2f/dxdy = -a * x * y * (x^2 + y^2)^(-3/2) + b * c / (x^2 + y^2) * [c * x * y * sin(c * atan2(y, x)) / (x^2 + y^2) + cos(c * atan2(y, x)) * (1 - 2 * x^2 / (x^2 + y^2))]
+  // d2f/dy2 = a * [1 - y^2 / (x^2 + y^2)] / sqrt(x^2 + y^2) - b * c * x * [2 * y * cos(c * atan2(y, x)) + c * x * sin(c * atan2(y, x))] / (x^2 + y^2)^2
+  // d2f/dydx = -a * x * y * (x^2 + y^2)^(-3/2) + b * c / (x^2 + y^2) * [c * x * y * sin(c * atan2(y, x)) / (x^2 + y^2) + cos(c * atan2(y, x)) * (2 * y^2 / (x^2 + y^2) - 1)]
+  return [a, b, c](const Vectord<2> &pt) -> Matrixd<2> {
+    const auto &x = pt(0);
+    const auto &y = pt(1);
+
+    const auto norm_sq = pt.squaredNorm();
+    const auto norm = std::sqrt(norm_sq);
+
+    const auto A = a / norm;
+    const auto C = c * atan2(y, x);
+    const auto bc = b * c;
+
+    const auto y_hat = y / norm_sq;
+    const auto y_y_hat = y * y_hat;
+    const auto x_hat = x / norm_sq;
+    const auto x_x_hat = x * x_hat;
+    const auto x_y_hat = x * y_hat;
+
+    const auto d2fdx2 = A * (1.0 - x_x_hat) + bc * y_hat * (2.0 * x * cos(C) - c * y * sin(C));
+    const auto d2fdxdy = -A * x_y_hat + (bc / norm_sq) * (c * x_y_hat * sin(C) + cos(C) * (1.0 - 2.0 * x_x_hat));
+    const auto d2fdydx = -A * x_y_hat + (bc / norm_sq) * (c * x_y_hat * sin(C) + cos(C) * (2.0 * y_y_hat - 1.0));
+    const auto d2fdy2 = A * (1.0 - y_y_hat) - bc * x_hat * (2.0 * y * cos(C) + c * x * sin(C));
+    // clang-format off
+    Matrixd<2> hess;
+    hess << d2fdx2,  d2fdxdy,
+            d2fdydx, d2fdy2;
+    // clang-format on
+    return hess;
+  };
+}
+
+point_vec_2d_t level_flower(double f, size_t N, double a = 1.0, double b = 1.0, double c = 4.0)
+{
+    // f = a * r + b * sin(c * theta)
+    // r = (f - b * sin(c * theta)) / a
+
+    auto pts = point_vec_2d_t();
+    auto inc = 2.0 * M_PI / static_cast<double>(N);
+    for (size_t i = 0; i <= N; ++i)
+    {
+      auto theta = -M_PI + inc * static_cast<double>(i);
+      auto r = (f - b * sin(c * theta)) / a;
+
+      auto x = r * cos(theta);
+      auto y = r * sin(theta);
+
+      pts.emplace_back(x, y);
+    }
+
+  return pts;
+}
+
+void flower_viz(gnuplotio::PlotGroup *plots,
+                    bracket_t<2> x_lim,
+                    bracket_t<2> y_lim,
+                    const std::vector<double> &levels,
+                    size_t N = 360,
+                    double a = 1.0,
+                    double b = 1.0,
+                    double c = 4.0)
+{
+  std::ranges::sort(x_lim);
+  std::ranges::sort(y_lim);
+
+  auto isOutOfBounds = [x_lim, y_lim](auto const& pt){return std::get<0>(pt) < x_lim[0] || std::get<0>(pt) > x_lim[1] || std::get<1>(pt) < y_lim[0] || std::get<1>(pt) > y_lim[1];};
+  for (const auto& level : levels)
+  {
+    auto level_pts = level_flower(level, N, a, b, c);
+    level_pts.erase(std::remove_if(level_pts.begin(), level_pts.end(), isOutOfBounds), level_pts.end());
+
+    auto ss = std::stringstream();
+    ss << "with lines notitle";
+    plots->add_plot1d(level_pts, ss.str());
+  }
+}
 }

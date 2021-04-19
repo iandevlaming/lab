@@ -203,3 +203,14 @@ cc_binary(
         "@gnuplot-iostream//:gnuplot-iostream-lib",
     ],
 )
+
+cc_binary(
+    name = "test_functions_viz",
+    srcs = ["test/test_functions_viz.cpp"],
+    copts = copts,
+    deps = [
+        ":alias_cc",
+        ":test_functions_cc",
+        "@gnuplot-iostream//:gnuplot-iostream-lib",
+    ],
+)

@@ -2,7 +2,9 @@
 
 #include <Eigen/Core>
 
+#include <array>
 #include <type_traits>
+#include <vector>
 
 namespace algo_opt
 {
