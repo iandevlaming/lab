@@ -2,7 +2,9 @@
 
 #include <Eigen/Core>
 
+#include <array>
 #include <type_traits>
+#include <vector>
 
 namespace algo_opt
 {
@@ -50,6 +52,7 @@ using binary_hess_t = multivar_hess_t<2>;
 using binary_level_t =
     std::function<std::optional<std::array<double, 2>>(double, double)>;
 
+// misc types
 template <int N>
 using bracket_t = std::array<double, N>;
 
@@ -58,6 +61,8 @@ struct Point2d
   double x;
   double y;
 };
+
+using point_vec_2d_t = std::vector<std::tuple<double, double>>;
 
 } // namespace algo_opt
 
