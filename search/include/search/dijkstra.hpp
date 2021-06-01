@@ -15,7 +15,7 @@ template <typename I,
           typename LenF>
 std::tuple<std::unordered_map<N const *, I>,
            std::unordered_map<N const *, N const *>>
-dijkstra(const C<N> &graph, const N &source, NeighborF neighbors, LenF length)
+dijkstra(C<N> const &graph, N const &source, NeighborF neighbors, LenF length)
 {
   auto Q = std::unordered_set<const N *>();
   auto dist = std::unordered_map<N const *, I>();
