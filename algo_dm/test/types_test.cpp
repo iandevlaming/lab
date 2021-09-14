@@ -24,15 +24,13 @@ TEST(GetKeysTest, Simple)
 
 TEST(VariableTest, NegativeNumVals)
 {
-  auto bad_copy_constructor = []() {
-    auto name = ad::Variable::Name("name");
-    auto num_vals = -1;
-    return ad::Variable(name, num_vals);
-  };
-  EXPECT_THROW(bad_copy_constructor(), std::domain_error);
+  // copy arguments
+  auto name = ad::Variable::Name("name");
+  auto num_vals = -1;
+  EXPECT_THROW(ad::Variable(name, num_vals), std::domain_error);
 
-  auto bad_move_constructor = []() { return ad::Variable("name", -1); };
-  EXPECT_THROW(bad_move_constructor(), std::domain_error);
+  // move arguments
+  EXPECT_THROW(ad::Variable("name", -1), std::domain_error);
 }
 
 TEST(VariableTest, Equality)
@@ -124,6 +122,227 @@ TEST(AssignmentTest, EqualityTest)
     assignment_assign[item.first] = item.second;
 
   EXPECT_EQ(assignment_copy, assignment_assign);
+}
+
+TEST(FactorTableTest, BadConstructionTest)
+{
+  auto assignment_1 = ad::Assignment();
+  assignment_1["var_1"] = 1;
+
+  auto assignment_2 = ad::Assignment();
+  assignment_2["var_2"] = 1;
+
+  auto table =
+      std::unordered_map<ad::Assignment, double, ad::Assignment::Hash>();
+  table[assignment_1] = 0.2;
+  table[assignment_2] = 0.8;
+
+  auto bad_constructor = [&table]() { return ad::FactorTable(table); };
+  EXPECT_THROW(bad_constructor(), std::invalid_argument);
+}
+
+TEST(FactorTableTest, ConstructionTest)
+{
+  auto assignment_1 = ad::Assignment();
+  assignment_1["var_1"] = 1;
+  assignment_1["var_2"] = 0;
+
+  auto assignment_2 = ad::Assignment();
+  assignment_2["var_1"] = 0;
+  assignment_2["var_2"] = 1;
+
+  auto table =
+      std::unordered_map<ad::Assignment, double, ad::Assignment::Hash>();
+  table[assignment_1] = 0.2;
+  table[assignment_2] = 0.8;
+
+  auto factor_table = ad::FactorTable(table);
+  auto factor_table_keys = factor_table.getKeys();
+  EXPECT_EQ(factor_table_keys, ad::getKeys(table));
+  for (const auto& key : factor_table_keys)
+    EXPECT_EQ(factor_table.get(key).value(), table[key]);
+}
+
+TEST(FactorTableTest, EmptyConstructionTest)
+{
+  auto empty_tables = std::vector<ad::FactorTable>();
+  empty_tables.emplace_back(
+      std::unordered_map<ad::Assignment, double, ad::Assignment::Hash>());
+  empty_tables.emplace_back();
+
+  for (const auto& table : empty_tables)
+  {
+    EXPECT_TRUE(table.getKeys().empty());
+    EXPECT_TRUE(table.getAssignmentKeys().empty());
+  }
+
+  auto is_matching = [& t = empty_tables.front()](const auto& table) {
+    return table == t;
+  };
+  EXPECT_TRUE(std::ranges::all_of(empty_tables, is_matching));
+}
+
+TEST(FactorTableTest, BadGetTest)
+{
+  auto assignment = ad::Assignment();
+  assignment["var"] = 1;
+
+  auto table = ad::FactorTable();
+  EXPECT_FALSE(table.get(assignment).has_value());
+}
+
+TEST(FactorTableTest, BadSetTest)
+{
+  auto assignment_1 = ad::Assignment();
+  assignment_1["var_1"] = 1;
+
+  auto assignment_2 = ad::Assignment();
+  assignment_2["var_2"] = 0;
+
+  auto table = ad::FactorTable();
+  table.set(assignment_1, 0.0);
+
+  EXPECT_THROW(table.set(assignment_2, 0.0), std::invalid_argument);
+}
+
+TEST(FactorTableTest, SetTest)
+{
+  auto var_name = std::string("var");
+
+  auto assignment_1 = ad::Assignment();
+  assignment_1[var_name] = 1;
+  auto prob_1 = 0.2;
+
+  auto assignment_2 = ad::Assignment();
+  assignment_2[var_name] = 0;
+  auto prob_2 = 0.8;
+
+  auto table = ad::FactorTable();
+  table.set(assignment_1, prob_1);
+  table.set(assignment_2, prob_2);
+
+  auto assignments = std::vector<ad::Assignment>({assignment_1, assignment_2});
+  EXPECT_EQ(table.getAssignmentKeys(),
+            std::vector<ad::Assignment::Key>({var_name}));
+  EXPECT_EQ(table.getKeys().size(), 2);
+
+  for (const auto& assignment : table.getKeys())
+    EXPECT_NE(std::ranges::find(assignments, assignment), assignments.cend());
+
+  EXPECT_EQ(table.get(assignment_1).value(), prob_1);
+  EXPECT_EQ(table.get(assignment_2).value(), prob_2);
+}
+
+TEST(FactorTableTest, LateInitializationTest)
+{
+  auto test_tables = std::vector<ad::FactorTable>();
+  test_tables.emplace_back(
+      std::unordered_map<ad::Assignment, double, ad::Assignment::Hash>());
+  test_tables.emplace_back();
+
+  auto var_name = std::string("var");
+  auto assignment = ad::Assignment();
+  assignment[var_name] = 1;
+  auto probability = 1.0;
+  for (auto& table : test_tables)
+  {
+    table.set(assignment, probability);
+    EXPECT_EQ(table.get(assignment).value(), probability);
+    EXPECT_EQ(table.getKeys(), std::vector<ad::Assignment>({assignment}));
+    EXPECT_EQ(table.getAssignmentKeys(),
+              std::vector<ad::Assignment::Key>({var_name}));
+  }
+
+  auto is_matching = [& t = test_tables.front()](const auto& table) {
+    return table == t;
+  };
+  EXPECT_TRUE(std::ranges::all_of(test_tables, is_matching));
+}
+
+TEST(FactorTableTest, NormalizeTest)
+{
+  auto var_name = std::string("var");
+
+  auto assignment_1 = ad::Assignment();
+  assignment_1[var_name] = 0;
+  auto assignment_2 = ad::Assignment();
+  assignment_2[var_name] = 1;
+
+  auto prob = 0.1;
+  auto table = ad::FactorTable();
+  table.set(assignment_1, prob);
+  table.set(assignment_2, prob);
+
+  table.normalize();
+  EXPECT_DOUBLE_EQ(table.get(assignment_1).value(), 0.5);
+  EXPECT_DOUBLE_EQ(table.get(assignment_2).value(), 0.5);
+}
+
+TEST(FactorTest, ConstructionTest)
+{
+  auto var = ad::Variable("var", 2);
+  auto vars = std::vector<ad::Variable>({var});
+
+  auto assignment_1 = ad::Assignment();
+  assignment_1[var.getName()] = 0;
+  auto assignment_2 = ad::Assignment();
+  assignment_2[var.getName()] = 1;
+
+  auto prob = 0.1;
+  auto table = ad::FactorTable();
+  table.set(assignment_1, prob);
+  table.set(assignment_2, prob);
+
+  auto factor = ad::Factor(vars, table);
+
+  EXPECT_EQ(factor.getVariables(), vars);
+  EXPECT_EQ(factor.getFactorTable(), table);
+}
+
+TEST(FactorTest, NormalizeTest)
+{
+  auto var = ad::Variable("var", 2);
+
+  auto assignment_1 = ad::Assignment();
+  assignment_1[var.getName()] = 0;
+  auto assignment_2 = ad::Assignment();
+  assignment_2[var.getName()] = 1;
+
+  auto prob = 0.1;
+  auto table = ad::FactorTable();
+  table.set(assignment_1, prob);
+  table.set(assignment_2, prob);
+
+  auto factor = ad::Factor({var}, table);
+  factor.normalize();
+
+  EXPECT_DOUBLE_EQ(factor.getFactorTable().get(assignment_1).value(), 0.5);
+  EXPECT_DOUBLE_EQ(factor.getFactorTable().get(assignment_2).value(), 0.5);
+}
+
+TEST(SelectTest, SimpleTest)
+{
+  auto vars = std::vector<ad::Variable::Name>({"var_1", "var_2", "var_3"});
+  auto assignment = ad::Assignment();
+  for (auto i = 0; i < static_cast<int>(vars.size()); ++i)
+    assignment[vars[i]] = i;
+
+  auto sub_vars = std::vector<ad::Variable::Name>(vars.begin(), vars.end() - 1);
+  auto sub_assignment = ad::select(assignment, sub_vars);
+
+  EXPECT_EQ(sub_assignment.getKeys(), sub_vars);
+  for (auto i = 0; i < static_cast<int>(sub_vars.size()); ++i)
+    EXPECT_DOUBLE_EQ(sub_assignment.at(sub_vars[i]),
+                     assignment.at(sub_vars[i]));
+}
+
+TEST(SelectTest, BadVariableNameTest)
+{
+  auto assignment = ad::Assignment();
+  assignment["var_1"] = 1;
+
+  EXPECT_THROW(ad::select(assignment, {std::string("var_2")}),
+               std::invalid_argument);
 }
 
 TEST(CartesianProductTest, CartesianProductSingle)

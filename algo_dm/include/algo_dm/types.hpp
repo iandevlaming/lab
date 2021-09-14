@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <map>
 #include <numeric>
+#include <optional>
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
@@ -12,10 +13,11 @@
 
 namespace algo_dm
 {
-template <template <typename, typename> typename MapT,
+template <template <typename, typename, typename...> typename MapT,
           typename Key,
-          typename Value>
-std::vector<Key> getKeys(const MapT<Key, Value>& map)
+          typename Value,
+          typename... Args>
+std::vector<Key> getKeys(const MapT<Key, Value, Args...>& map)
 {
   auto keys = std::vector<Key>();
   keys.reserve(map.size());
@@ -101,7 +103,7 @@ public:
 
   struct Hash
   {
-    size_t operator()(const Assignment& assignment)
+    size_t operator()(const Assignment& assignment) const
     {
       auto seed = static_cast<size_t>(0);
       auto pairwise_hash = [&seed](const auto& p) {
@@ -118,7 +120,6 @@ private:
   std::map<Key, Value> assignment_;
 };
 
-template <typename Hash = Assignment::Hash>
 class FactorTable
 {
 public:
@@ -126,42 +127,49 @@ public:
   using Value = double;
 
   FactorTable() = default;
-  FactorTable(const std::unordered_map<Assignment, double, Hash>& table)
+  FactorTable(
+      const std::unordered_map<Assignment, double, Assignment::Hash>& table)
       : table_(table)
   {
-    auto assignment_keys = table_.first().getKeys();
-    auto has_bad_keys = [&assignment_keys](const auto& p) {
-      return p.first != assignment_keys;
-    };
+    if (!table_.empty())
+    {
+      variable_names_ = table.cbegin()->first.getKeys();
+      auto has_bad_keys = [&](const auto& p) {
+        return p.first.getKeys() != variable_names_;
+      };
 
-    if (std::ranges::any_of(table_, has_bad_keys))
+      if (std::ranges::any_of(table_, has_bad_keys))
+        throw std::invalid_argument(
+            "All Assignments in a FactorTable must have the same keys");
+    }
+  }
+
+  std::optional<Value> get(const Key& key) const
+  {
+    if (table_.contains(key))
+      return table_.at(key);
+    return {};
+  }
+
+  void set(const Key& key, Value value)
+  {
+    if (!table_.empty() && variable_names_ != key.getKeys())
       throw std::invalid_argument(
           "All Assignments in a FactorTable must have the same keys");
-  }
 
-  Value& operator[](const Key& key) { return table_[key]; }
-  const Value& operator[](const Key& key) const { return table_[key]; }
+    if (table_.empty())
+      variable_names_ = key.getKeys();
+
+    table_[key] = value;
+  }
 
   std::vector<Key> getKeys() const { return algo_dm::getKeys(table_); }
-
-private:
-  std::unordered_map<Assignment, Value, Hash> table_;
-};
-
-template <typename Hash = Assignment::Hash>
-class Factor
-{
-public:
-  Factor(const std::vector<Variable>& variables, const FactorTable<Hash>& table)
-      : variables_(variables), table_(table)
+  std::vector<Assignment::Key> getAssignmentKeys() const
   {
+    return variable_names_;
   }
-  Factor(std::vector<Variable>&& variables, FactorTable<Hash>&& table)
-      : variables_(std::move(variables)), table_(std::move(table))
-  {
-  }
-  const std::vector<Variable>& variables() const { return variables_; }
-  const FactorTable<Hash>& table() const { return table_; }
+
+  bool operator==(const FactorTable& rhs) const { return table_ == rhs.table_; }
   void normalize()
   {
     auto sum_value = [](auto sum, const auto& p) { return sum + p.second; };
@@ -170,13 +178,41 @@ public:
   }
 
 private:
+  std::unordered_map<Assignment, Value, Assignment::Hash> table_;
+  std::vector<Assignment::Key> variable_names_;
+};
+
+class Factor
+{
+public:
+  Factor(const std::vector<Variable>& variables, const FactorTable& table)
+      : variables_(variables), table_(table)
+  {
+  }
+  Factor(std::vector<Variable>&& variables, FactorTable&& table)
+      : variables_(std::move(variables)), table_(std::move(table))
+  {
+  }
+  const std::vector<Variable>& getVariables() const { return variables_; }
+  const FactorTable& getFactorTable() const { return table_; }
+  void normalize() { table_.normalize(); }
+
+private:
   std::vector<Variable> variables_;
-  FactorTable<Hash> table_;
+  FactorTable table_;
 };
 
 Assignment select(const Assignment& assignment,
                   const std::vector<Variable::Name>& variable_names)
 {
+  auto assignment_keys = assignment.getKeys();
+  auto is_invalid = [&assignment_keys](const Variable::Name& n) {
+    return std::ranges::find(assignment_keys, n) == assignment_keys.cend();
+  };
+  if (std::ranges::any_of(variable_names, is_invalid))
+    throw std::invalid_argument(
+        "Cannot select variable names not contained by Assignment");
+
   auto sub_assignment = Assignment();
   auto sub_assign = [&assignment, &sub_assignment](const Variable::Name& name) {
     sub_assignment[name] = assignment.at(name);
