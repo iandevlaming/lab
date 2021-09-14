@@ -93,8 +93,13 @@ public:
   Assignment(const std::map<Key, Value>& assignment) : assignment_(assignment)
   {
   }
-  Value& operator[](const Key& key) { return assignment_[key]; }
-  const Value& at(const Key& key) const { return assignment_.at(key); }
+  void set(const Key& key, Value value) { assignment_[key] = value; }
+  std::optional<Value> get(const Key& key) const
+  {
+    if (assignment_.contains(key))
+      return assignment_.at(key);
+    return {};
+  }
   std::vector<Key> getKeys() const { return algo_dm::getKeys(assignment_); }
   bool operator==(const Assignment& other) const
   {
@@ -205,17 +210,13 @@ private:
 Assignment select(const Assignment& assignment,
                   const std::vector<Variable::Name>& variable_names)
 {
-  auto assignment_keys = assignment.getKeys();
-  auto is_invalid = [&assignment_keys](const Variable::Name& n) {
-    return std::ranges::find(assignment_keys, n) == assignment_keys.cend();
-  };
-  if (std::ranges::any_of(variable_names, is_invalid))
-    throw std::invalid_argument(
-        "Cannot select variable names not contained by Assignment");
-
   auto sub_assignment = Assignment();
   auto sub_assign = [&assignment, &sub_assignment](const Variable::Name& name) {
-    sub_assignment[name] = assignment.at(name);
+    auto value = assignment.get(name);
+    if (!value.has_value())
+      throw std::invalid_argument(
+          "Cannot select variable names not contained by Assignment");
+    sub_assignment.set(name, assignment.get(name).value());
   };
   std::ranges::for_each(variable_names, sub_assign);
 
@@ -277,7 +278,7 @@ std::vector<Assignment> assign(const std::vector<Variable>& variables)
   {
     auto assignment = Assignment();
     for (auto i = 0; i < static_cast<int>(value.size()); ++i)
-      assignment[names[i]] = value[i];
+      assignment.set(names[i], value[i]);
     assignments.push_back(assignment);
   }
 
