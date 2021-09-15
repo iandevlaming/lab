@@ -173,6 +173,51 @@ const FactorTable& Factor::getFactorTable() const { return table_; }
 
 void Factor::normalize() { table_.normalize(); }
 
+AdjacencyList::AdjacencyList(int num_nodes)
+    : num_nodes_(num_nodes),
+      graph_(std::vector<std::unordered_set<int>>(num_nodes,
+                                                  std::unordered_set<int>()))
+{
+}
+
+int AdjacencyList::getNumNodes() const { return num_nodes_; }
+
+void AdjacencyList::addEdge(int from_node, int to_node)
+{
+  if (from_node >= num_nodes_ || to_node >= num_nodes_)
+    throw std::invalid_argument("Edges must be between nodes on the graph");
+
+  graph_[from_node].insert(to_node);
+}
+const std::unordered_set<int>& AdjacencyList::getEdges(int node) const
+{
+  if (node >= num_nodes_)
+    throw std::invalid_argument("Cannot get edges for nodes off of the graph");
+
+  return graph_[node];
+}
+
+BayesianNetwork::BayesianNetwork(const std::vector<Variable>& variables,
+                                 const std::vector<Factor>& factors,
+                                 const AdjacencyList& graph)
+    : variables_(variables), factors_(factors), graph_(graph)
+{
+  if (variables_.size() != factors.size())
+    throw std::invalid_argument("Every node must have a factor");
+}
+
+const std::vector<Variable>& BayesianNetwork::getVariables() const
+{
+  return variables_;
+}
+
+const std::vector<Factor>& BayesianNetwork::getFactors() const
+{
+  return factors_;
+}
+
+const AdjacencyList& BayesianNetwork::getGraph() const { return graph_; }
+
 Assignment select(const Assignment& assignment,
                   const std::vector<Variable::Name>& variable_names)
 {

@@ -109,6 +109,35 @@ private:
   FactorTable table_;
 };
 
+class AdjacencyList
+{
+public:
+  AdjacencyList(int num_nodes);
+  int getNumNodes() const;
+  void addEdge(int from_node, int to_node);
+  const std::unordered_set<int>& getEdges(int node) const;
+
+private:
+  int num_nodes_;
+  std::vector<std::unordered_set<int>> graph_;
+};
+
+class BayesianNetwork
+{
+public:
+  BayesianNetwork(const std::vector<Variable>& variables,
+                  const std::vector<Factor>& factors,
+                  const AdjacencyList& graph);
+  const std::vector<Variable>& getVariables() const;
+  const std::vector<Factor>& getFactors() const;
+  const AdjacencyList& getGraph() const;
+
+private:
+  std::vector<Variable> variables_;
+  std::vector<Factor> factors_;
+  AdjacencyList graph_;
+};
+
 Assignment select(const Assignment& assignment,
                   const std::vector<Variable::Name>& variable_names);
 
