@@ -173,7 +173,7 @@ TEST(FactorTableTest, EmptyConstructionTest)
     EXPECT_TRUE(table.getAssignmentKeys().empty());
   }
 
-  auto is_matching = [& t = empty_tables.front()](const auto& table) {
+  auto is_matching = [&t = empty_tables.front()](const auto& table) {
     return table == t;
   };
   EXPECT_TRUE(std::ranges::all_of(empty_tables, is_matching));
@@ -250,7 +250,7 @@ TEST(FactorTableTest, LateInitializationTest)
               std::vector<ad::Assignment::Key>({var_name}));
   }
 
-  auto is_matching = [& t = test_tables.front()](const auto& table) {
+  auto is_matching = [&t = test_tables.front()](const auto& table) {
     return table == t;
   };
   EXPECT_TRUE(std::ranges::all_of(test_tables, is_matching));
@@ -359,8 +359,8 @@ TEST(CartesianProductTest, CartesianProductSingle)
 
 TEST(CartesianProductTest, CartesianProductDouble)
 {
-  auto variable_2 = ad::Variable("variable", 2);
-  auto variable_3 = ad::Variable("variable", 3);
+  auto variable_2 = ad::Variable("variable_2", 2);
+  auto variable_3 = ad::Variable("variable_3", 3);
   auto variable_vec = std::vector<ad::Variable>({variable_2, variable_3});
 
   auto expected_product = std::vector<std::vector<int>>(
@@ -368,6 +368,29 @@ TEST(CartesianProductTest, CartesianProductDouble)
   auto product = ad::cartesianProduct(variable_vec);
 
   EXPECT_EQ(product, expected_product);
+}
+
+TEST(AssignTest, SimpleTest)
+{
+  auto variable_1 = ad::Variable("variable_1", 2);
+  auto variable_2 = ad::Variable("variable_2", 2);
+  auto variables = std::vector<ad::Variable>({variable_1, variable_2});
+
+  auto products = ad::cartesianProduct(variables);
+  auto expected_assignments = std::vector<ad::Assignment>();
+  for (const auto& product : products)
+  {
+    auto assignment = ad::Assignment();
+    assignment.set(variable_1.getName(), product.front());
+    assignment.set(variable_2.getName(), product.back());
+    expected_assignments.push_back(assignment);
+  }
+
+  auto assignments = ad::assign(variables);
+
+  EXPECT_EQ(assignments.size(), expected_assignments.size());
+  for (const auto& assignment : expected_assignments)
+    EXPECT_NE(std::ranges::find(assignments, assignment), assignments.cend());
 }
 
 int main(int argc, char** argv)
