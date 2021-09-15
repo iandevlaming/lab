@@ -249,4 +249,23 @@ std::vector<Assignment> assign(const std::vector<Variable>& variables)
 
   return assignments;
 }
+
+double computeProbability(const std::vector<FactorTable>& tables,
+                          const Assignment& assignment)
+{
+  auto get_probability = [&assignment](const FactorTable& table) {
+    auto vars = table.getAssignmentKeys();
+    auto sub_assignment = select(assignment, vars);
+    auto p = table.get(sub_assignment);
+    return p.has_value() ? p.value() : 0.0;
+  };
+
+  auto accumulate_probability = [&get_probability](double p,
+                                                   const FactorTable& t) {
+    return p * get_probability(t);
+  };
+
+  return std::accumulate(
+      tables.cbegin(), tables.cend(), 1.0, accumulate_probability);
+}
 } // namespace algo_dm

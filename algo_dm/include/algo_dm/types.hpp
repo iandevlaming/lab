@@ -120,4 +120,6 @@ cartesianProduct(const std::vector<Variable>& variables);
 
 std::vector<Assignment> assign(const std::vector<Variable>& variables);
 
+double computeProbability(const std::vector<FactorTable>& tables,
+                          const Assignment& assignment);
 } // namespace algo_dm

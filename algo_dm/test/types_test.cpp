@@ -393,6 +393,38 @@ TEST(AssignTest, SimpleTest)
     EXPECT_NE(std::ranges::find(assignments, assignment), assignments.cend());
 }
 
+TEST(computeProbabilityTest, Example3P5)
+{
+  auto b = ad::Variable("b", 2);
+  auto s = ad::Variable("s", 2);
+  auto e = ad::Variable("e", 2);
+  auto d = ad::Variable("d", 2);
+  auto c = ad::Variable("c", 2);
+
+  auto tables = std::vector<ad::FactorTable>();
+  tables.emplace_back(ad::assign({b}), std::vector({0.99, 0.01}));
+  tables.emplace_back(ad::assign({s}), std::vector({0.98, 0.02}));
+  tables.emplace_back(
+      ad::assign({e, b, s}),
+      std::vector({0.90, 0.04, 0.05, 0.01, 0.10, 0.96, 0.95, 0.99}));
+  tables.emplace_back(ad::assign({d, e}),
+                      std::vector({0.96, 0.03, 0.04, 0.97}));
+  tables.emplace_back(ad::assign({c, e}),
+                      std::vector({0.98, 0.01, 0.02, 0.99}));
+
+  auto assignment = ad::Assignment();
+  assignment.set("b", 0);
+  assignment.set("s", 0);
+  assignment.set("e", 0);
+  assignment.set("d", 1);
+  assignment.set("c", 0);
+
+  auto total_probability = ad::computeProbability(tables, assignment);
+  auto expected_probability = 0.034228655999999996;
+
+  EXPECT_DOUBLE_EQ(total_probability, expected_probability);
+}
+
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
