@@ -12,15 +12,16 @@ copts = [
 cc_library(
     name = "alias_cc",
     hdrs = ["include/algo_dm/alias.hpp"],
-    strip_include_prefix = "include",
     copts = copts,
+    strip_include_prefix = "include",
 )
 
 cc_library(
     name = "types_cc",
+    srcs = ["src/types.cpp"],
     hdrs = ["include/algo_dm/types.hpp"],
-    strip_include_prefix = "include",
     copts = copts,
+    strip_include_prefix = "include",
     deps = [
         "@boost//:functional",
     ],
