@@ -40,4 +40,24 @@ Factor operator*(const Factor& lhs, const Factor& rhs)
 
   return Factor(merged_vars, merged_table);
 }
+
+Factor marginalize(const Factor& factor, const Variable::Name name)
+{
+  auto marginalized_table = FactorTable();
+  const auto& table = factor.getFactorTable();
+  for (const auto& assignment : table.getAssignments())
+  {
+    auto pruned_assignment = assignment;
+    pruned_assignment.erase(name);
+
+    auto existing_p = marginalized_table.get(pruned_assignment);
+    auto new_p = existing_p.has_value() ? existing_p.value() : 0.0;
+    new_p += table.get(assignment).value();
+
+    marginalized_table.set(pruned_assignment, new_p);
+  }
+
+  auto reduced_vars = erase(factor.getVariables(), name);
+  return Factor(reduced_vars, marginalized_table);
+}
 } // namespace algo_dm
