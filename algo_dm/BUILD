@@ -27,6 +27,17 @@ cc_library(
     ],
 )
 
+cc_library(
+    name = "inference_cc",
+    srcs = ["src/inference.cpp"],
+    hdrs = ["include/algo_dm/inference.hpp"],
+    copts = copts,
+    strip_include_prefix = "include",
+    deps = [
+        ":types_cc",
+    ],
+)
+
 # binaries
 
 # tests
@@ -37,6 +48,17 @@ cc_test(
     deps = [
         ":alias_cc",
         ":types_cc",
+        "@com_google_googletest//:gtest",
+    ],
+)
+
+cc_test(
+    name = "inference_test",
+    srcs = ["test/inference_test.cpp"],
+    copts = copts,
+    deps = [
+        ":alias_cc",
+        ":inference_cc",
         "@com_google_googletest//:gtest",
     ],
 )
