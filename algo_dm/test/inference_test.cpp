@@ -50,6 +50,26 @@ TEST(MarginalizeTest, Example3P2)
   EXPECT_EQ(marginalized_factor, expected_factor);
 }
 
+TEST(ConditionTest, Example3P3)
+{
+  const auto x = ad::Variable("x", 2);
+  const auto y = ad::Variable("y", 2);
+  const auto z = ad::Variable("z", 2);
+
+  const auto table = ad::FactorTable(
+      ad::assign({x, y, z}),
+      std::vector({0.08, 0.31, 0.09, 0.37, 0.01, 0.05, 0.02, 0.07}));
+  const auto factor = ad::Factor({x, y, z}, table);
+
+  const auto conditioned_factor = ad::condition(factor, "y", 1);
+
+  const auto expected_table = ad::FactorTable(
+      ad::assign({x, z}), std::vector({0.09, 0.37, 0.02, 0.07}));
+  const auto expected_factor = ad::Factor({x, z}, expected_table);
+
+  EXPECT_EQ(conditioned_factor, expected_factor);
+}
+
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);

@@ -60,4 +60,37 @@ Factor marginalize(const Factor& factor, const Variable::Name name)
   auto reduced_vars = erase(factor.getVariables(), name);
   return Factor(reduced_vars, marginalized_table);
 }
+
+bool inScope(const Factor& factor, const Variable::Name name)
+{
+  auto is_named = [](const auto& var_name) {
+    return [&var_name](const auto& var) { return var.getName() == var_name; };
+  };
+
+  return std::ranges::any_of(factor.getVariables(), is_named(name));
+}
+
+Factor condition(const Factor& factor,
+                 const Variable::Name name,
+                 const Assignment::Value& value)
+{
+  if (!inScope(factor, name))
+    return factor;
+
+  auto conditioned_table = FactorTable();
+  const auto& table = factor.getFactorTable();
+  for (const auto& assignment : table.getAssignments())
+  {
+    if (assignment.get(name).value() == value)
+    {
+      auto conditioned_assignment = assignment;
+      conditioned_assignment.erase(name);
+      conditioned_table.set(conditioned_assignment,
+                            table.get(assignment).value());
+    }
+  }
+
+  auto reduced_vars = erase(factor.getVariables(), name);
+  return Factor(reduced_vars, conditioned_table);
+}
 } // namespace algo_dm

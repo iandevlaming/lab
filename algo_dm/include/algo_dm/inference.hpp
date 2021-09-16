@@ -24,4 +24,10 @@ C<Ts...> setDiff(const C<Ts...>& super_set, const C<Ts...>& disjoint_set)
 Factor operator*(const Factor& lhs, const Factor& rhs);
 
 Factor marginalize(const Factor& factor, const Variable::Name name);
+
+bool inScope(const Factor& factor, const Variable::Name name);
+
+Factor condition(const Factor& factor,
+                 const Variable::Name name,
+                 const Assignment::Value& value);
 } // namespace algo_dm
