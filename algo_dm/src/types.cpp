@@ -41,14 +41,15 @@ bool operator==(const Variable& lhs, const Variable& rhs)
 
 std::vector<Variable::Name> getNames(const std::vector<Variable>& variables)
 {
-  auto variable_names = std::vector<Variable::Name>();
-  variable_names.reserve(variables.size());
-
   auto select_names = [](const Variable& v) { return v.getName(); };
-  std::ranges::transform(
-      variables, std::back_inserter(variable_names), select_names);
+  auto names_view = std::views::transform(variables, select_names);
+  return std::vector<Variable::Name>(names_view.begin(), names_view.end());
+}
 
-  return variable_names;
+std::ostream& operator<<(std::ostream& os, const Variable& var)
+{
+  os << "Variable " << var.getName() << " (" << var.getNumVals() << ")";
+  return os;
 }
 
 Assignment::Assignment(const std::map<Key, Value>& assignment)
@@ -65,7 +66,13 @@ std::optional<Assignment::Value> Assignment::get(const Key& key) const
   return {};
 }
 
-std::vector<Assignment::Key> Assignment::getKeys() const
+void Assignment::erase(const Key& key)
+{
+  if (assignment_.contains(key))
+    assignment_.erase(key);
+}
+
+std::vector<Assignment::Key> Assignment::getVariableNames() const
 {
   return algo_dm::getKeys(assignment_);
 }
@@ -87,21 +94,31 @@ size_t Assignment::Hash::operator()(const Assignment& assignment) const
   return seed;
 }
 
+std::ostream& operator<<(std::ostream& os, const Assignment& a)
+{
+  const auto& vars = a.getVariableNames();
+  for (int i = 0; i < static_cast<int>(vars.size()); ++i)
+  {
+    os << vars[i] << ": " << a.get(vars[i]).value();
+    if (i != static_cast<int>(vars.size()) - 1)
+      os << ", ";
+  }
+  return os;
+}
+
+FactorTable::FactorTable(
+    const std::map<Assignment, double, AssignmentCompare>& table)
+{
+  checkInput(table);
+  table_ = table;
+}
+
 FactorTable::FactorTable(
     const std::unordered_map<Assignment, double, Assignment::Hash>& table)
-    : table_(table)
 {
-  if (!table_.empty())
-  {
-    variable_names_ = table.cbegin()->first.getKeys();
-    auto has_bad_keys = [&](const auto& p) {
-      return p.first.getKeys() != variable_names_;
-    };
-
-    if (std::ranges::any_of(table_, has_bad_keys))
-      throw std::invalid_argument(
-          "All Assignments in a FactorTable must have the same keys");
-  }
+  checkInput(table);
+  table_ = std::map<Assignment, double, AssignmentCompare>(table.cbegin(),
+                                                           table.cend());
 }
 
 FactorTable::FactorTable(const std::vector<Assignment>& assignments,
@@ -125,29 +142,37 @@ std::optional<FactorTable::Value> FactorTable::get(const Key& key) const
 
 void FactorTable::set(const Key& key, Value value)
 {
-  if (!table_.empty() && variable_names_ != key.getKeys())
+  if (!table_.empty() && variable_names_ != key.getVariableNames())
     throw std::invalid_argument(
         "All Assignments in a FactorTable must have the same keys");
 
   if (table_.empty())
-    variable_names_ = key.getKeys();
+    variable_names_ = key.getVariableNames();
 
   table_[key] = value;
 }
 
-std::vector<FactorTable::Key> FactorTable::getKeys() const
+std::vector<FactorTable::Key> FactorTable::getAssignments() const
 {
   return algo_dm::getKeys(table_);
 }
 
-std::vector<Assignment::Key> FactorTable::getAssignmentKeys() const
+std::vector<Assignment::Key> FactorTable::getVariableNames() const
 {
   return variable_names_;
 }
 
-bool FactorTable::operator==(const FactorTable& rhs) const
+bool operator==(const FactorTable& lhs, const FactorTable& rhs)
 {
-  return table_ == rhs.table_;
+  const auto& assignments = lhs.getAssignments();
+  if (assignments != rhs.getAssignments())
+    return false;
+
+  for (const auto& a : assignments)
+    if (std::abs(lhs.get(a).value() - rhs.get(a).value()) > 1e-12)
+      return false;
+
+  return true;
 }
 
 void FactorTable::normalize()
@@ -155,6 +180,55 @@ void FactorTable::normalize()
   auto sum_value = [](auto sum, const auto& p) { return sum + p.second; };
   auto z = std::accumulate(table_.cbegin(), table_.cend(), 0.0, sum_value);
   std::ranges::for_each(table_, [&z](auto& p) { p.second /= z; });
+}
+
+bool FactorTable::AssignmentCompare::operator()(const Assignment& lhs,
+                                                const Assignment& rhs) const
+{
+  const auto& vars = lhs.getVariableNames();
+
+  for (const auto& var : vars)
+  {
+    const auto lhs_val = lhs.get(var).value();
+    const auto rhs_val = rhs.get(var).value();
+
+    if (lhs_val < rhs_val)
+      return true;
+    else if (lhs_val > rhs_val)
+      return false;
+  }
+
+  return false;
+}
+
+std::ostream& operator<<(std::ostream& os, const FactorTable& table)
+{
+  const auto& vars = table.getVariableNames();
+  const auto& assignments = table.getAssignments();
+
+  for (int row = -1; row < static_cast<int>(assignments.size()); ++row)
+  {
+    for (int col = 0; col < static_cast<int>(vars.size()); ++col)
+    {
+      if (row < 0)
+        os << vars[col];
+      else
+        os << assignments[row].get(vars[col]).value();
+      os << "\t";
+
+      if (col == static_cast<int>(vars.size()) - 1)
+      {
+        if (row < 0)
+          os << "P";
+        else
+          os << table.get(assignments[row]).value();
+      }
+    }
+    if (row != static_cast<int>(assignments.size()) - 1)
+      os << "\n";
+  }
+
+  return os;
 }
 
 Factor::Factor(const std::vector<Variable>& variables, const FactorTable& table)
@@ -171,7 +245,32 @@ const std::vector<Variable>& Factor::getVariables() const { return variables_; }
 
 const FactorTable& Factor::getFactorTable() const { return table_; }
 
+std::ostream& operator<<(std::ostream& os, const Factor& f)
+{
+  const auto& vars = f.getVariables();
+  const auto& table = f.getFactorTable();
+
+  os << "Variables: ";
+  for (int i = 0; i < static_cast<int>(vars.size()); ++i)
+  {
+    os << vars[i];
+    if (i != static_cast<int>(vars.size()) - 1)
+      os << ", ";
+  }
+
+  os << "\n\n" << table;
+
+  return os;
+}
+
 void Factor::normalize() { table_.normalize(); }
+
+bool operator==(const Factor& lhs, const Factor& rhs)
+{
+  auto equal = lhs.getFactorTable() == rhs.getFactorTable();
+  equal = equal && isPermutation(lhs.getVariables(), rhs.getVariables());
+  return equal;
+}
 
 AdjacencyList::AdjacencyList(int num_nodes)
     : num_nodes_(num_nodes),
@@ -232,6 +331,17 @@ Assignment select(const Assignment& assignment,
   std::ranges::for_each(variable_names, sub_assign);
 
   return sub_assignment;
+}
+
+std::vector<Variable> erase(const std::vector<Variable>& variables,
+                            const Variable::Name& name)
+{
+  auto is_not_named = [](const auto& var_name) {
+    return [&var_name](const auto& var) { return var.getName() != var_name; };
+  };
+
+  auto reduced_view = std::views::filter(variables, is_not_named(name));
+  return std::vector<Variable>(reduced_view.begin(), reduced_view.end());
 }
 
 // TODO: handle 0 num values
@@ -299,7 +409,7 @@ double computeProbability(const std::vector<FactorTable>& tables,
                           const Assignment& assignment)
 {
   auto get_probability = [&assignment](const FactorTable& table) {
-    auto vars = table.getAssignmentKeys();
+    auto vars = table.getVariableNames();
     auto sub_assignment = select(assignment, vars);
     auto p = table.get(sub_assignment);
     return p.has_value() ? p.value() : 0.0;

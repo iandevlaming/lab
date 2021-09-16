@@ -1,8 +1,10 @@
 #pragma once
 
 #include <algorithm>
+#include <iostream>
 #include <map>
 #include <optional>
+#include <ranges>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -15,13 +17,22 @@ template <template <typename, typename, typename...> typename MapT,
           typename... Args>
 std::vector<Key> getKeys(const MapT<Key, Value, Args...>& map)
 {
-  auto keys = std::vector<Key>();
-  keys.reserve(map.size());
-
   auto select_keys = [](const auto& p) { return p.first; };
-  std::ranges::transform(map, std::back_inserter(keys), select_keys);
+  auto keys_view = std::views::transform(map, select_keys);
+  return std::vector<Key>(keys_view.begin(), keys_view.end());
+}
 
-  return keys;
+template <template <typename...> typename C, typename... Ts>
+bool isPermutation(const C<Ts...>& container_1, const C<Ts...>& container_2)
+{
+  auto is_in = [](const auto& cont_1) {
+    return [&cont_1](const auto& elem_2) {
+      return std::ranges::find(cont_1, elem_2) != cont_1.cend();
+    };
+  };
+
+  return (container_1.size() == container_2.size()) &&
+         std::ranges::all_of(container_1, is_in(container_2));
 }
 
 // TODO: it might be interesting to have the assignment templated on its
@@ -48,6 +59,8 @@ private:
 
 bool operator==(const Variable& lhs, const Variable& rhs);
 
+std::ostream& operator<<(std::ostream& os, const Variable& var);
+
 std::vector<Variable::Name> getNames(const std::vector<Variable>& variables);
 
 class Assignment
@@ -60,7 +73,8 @@ public:
   Assignment(const std::map<Key, Value>& assignment);
   void set(const Key& key, Value value);
   std::optional<Value> get(const Key& key) const;
-  std::vector<Key> getKeys() const;
+  void erase(const Key& key);
+  std::vector<Key> getVariableNames() const;
   bool operator==(const Assignment& other) const;
 
   struct Hash
@@ -72,28 +86,57 @@ private:
   std::map<Key, Value> assignment_;
 };
 
+std::ostream& operator<<(std::ostream& os, const Assignment& a);
+
 class FactorTable
 {
 public:
   using Key = Assignment;
   using Value = double;
 
+  struct AssignmentCompare
+  {
+    bool operator()(const Assignment& lhs, const Assignment& rhs) const;
+  };
+
   FactorTable() = default;
+  FactorTable(const std::map<Assignment, double, AssignmentCompare>& table);
   FactorTable(
       const std::unordered_map<Assignment, double, Assignment::Hash>& table);
   FactorTable(const std::vector<Assignment>& assignments,
               const std::vector<double>& probabilities);
   std::optional<Value> get(const Key& key) const;
   void set(const Key& key, Value value);
-  std::vector<Key> getKeys() const;
-  std::vector<Assignment::Key> getAssignmentKeys() const;
-  bool operator==(const FactorTable& rhs) const;
+  std::vector<Key> getAssignments() const;
+  std::vector<Assignment::Key> getVariableNames() const;
   void normalize();
 
 private:
-  std::unordered_map<Assignment, Value, Assignment::Hash> table_;
+  template <typename MapT>
+  void checkInput(const MapT& table);
+  std::map<Assignment, Value, AssignmentCompare> table_;
   std::vector<Assignment::Key> variable_names_;
 };
+
+bool operator==(const FactorTable& lhs, const FactorTable& rhs);
+
+template <typename MapT>
+void FactorTable::checkInput(const MapT& table)
+{
+  if (!table.empty())
+  {
+    variable_names_ = table.cbegin()->first.getVariableNames();
+    auto has_bad_keys = [&](const auto& p) {
+      return p.first.getVariableNames() != variable_names_;
+    };
+
+    if (std::ranges::any_of(table, has_bad_keys))
+      throw std::invalid_argument(
+          "All Assignments in a FactorTable must have the same keys");
+  }
+}
+
+std::ostream& operator<<(std::ostream& os, const FactorTable& table);
 
 class Factor
 {
@@ -108,6 +151,10 @@ private:
   std::vector<Variable> variables_;
   FactorTable table_;
 };
+
+bool operator==(const Factor& lhs, const Factor& rhs);
+
+std::ostream& operator<<(std::ostream& os, const Factor& f);
 
 class AdjacencyList
 {
@@ -140,6 +187,9 @@ private:
 
 Assignment select(const Assignment& assignment,
                   const std::vector<Variable::Name>& variable_names);
+
+std::vector<Variable> erase(const std::vector<Variable>& variables,
+                            const Variable::Name& name);
 
 std::vector<std::vector<int>>
 cartesianProduct(std::vector<Variable>::const_iterator begin,
