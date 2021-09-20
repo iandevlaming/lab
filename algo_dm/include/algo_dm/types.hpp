@@ -193,6 +193,9 @@ private:
 Assignment select(const Assignment& assignment,
                   const std::vector<Variable::Name>& variable_names);
 
+std::vector<Variable> select(const std::vector<Variable>& variables,
+                             const std::vector<Variable::Name>& variable_names);
+
 std::vector<Variable> erase(const std::vector<Variable>& variables,
                             const Variable::Name& name);
 

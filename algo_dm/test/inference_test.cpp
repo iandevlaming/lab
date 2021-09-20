@@ -131,7 +131,8 @@ protected:
 
 TEST_F(Exercise3P4, ExactInferenceTest)
 {
-  auto factor_c = ad::infer(bayesian_network_, query_, evidence_);
+  const auto method = ad::ExactInference();
+  auto factor_c = ad::infer(method, bayesian_network_, query_, evidence_);
 
   EXPECT_EQ(factor_c.getFactorTable(), expected_table_);
 }
@@ -141,10 +142,45 @@ TEST_F(Exercise3P4, SumProductVariableEliminatioInferenceTest)
   auto get_name = [](const auto& v) { return v.getName(); };
   auto ordering_view =
       variables_ | std::views::transform(get_name) | std::views::reverse;
-  auto ordering = std::vector(ordering_view.begin(), ordering_view.end());
-  auto factor_c = ad::infer(bayesian_network_, query_, evidence_, ordering);
+  const auto ordering = std::vector(ordering_view.begin(), ordering_view.end());
+
+  const auto method = ad::VariableElimination({ordering});
+  const auto factor_c = ad::infer(method, bayesian_network_, query_, evidence_);
 
   EXPECT_EQ(factor_c.getFactorTable(), expected_table_);
+}
+
+TEST_F(Exercise3P4, DirectSampling)
+{
+  const auto method = ad::DirectSampling({10000});
+  const auto factor_c = ad::infer(method, bayesian_network_, query_, evidence_);
+
+  const auto& table = factor_c.getFactorTable();
+  const auto& assignments = table.getAssignments();
+
+  auto get_prob_of = [](const auto& t) {
+    return [&t](const auto& a) { return t.get(a).value(); };
+  };
+  auto expected_prob_view =
+      assignments | std::views::transform(get_prob_of(expected_table_));
+  auto expected_prob =
+      std::vector(expected_prob_view.begin(), expected_prob_view.end());
+
+  auto prob_view = assignments | std::views::transform(get_prob_of(table));
+  auto prob = std::vector(prob_view.begin(), prob_view.end());
+
+  auto sorted_idx_view =
+      std::views::iota(0, static_cast<int>(assignments.size()));
+  auto sorted_idx = std::vector(sorted_idx_view.begin(), sorted_idx_view.end());
+  auto sort_indices_using = [](const auto& c) {
+    return [&c](auto i, auto j) { return c[i] < c[j]; };
+  };
+  std::ranges::sort(sorted_idx, sort_indices_using(expected_prob));
+
+  auto access = [](const auto& c) { return [&c](auto i) { return c[i]; }; };
+  auto sorted_prob = sorted_idx | std::views::transform(access(prob));
+
+  EXPECT_TRUE(std::ranges::is_sorted(sorted_prob));
 }
 
 int main(int argc, char** argv)

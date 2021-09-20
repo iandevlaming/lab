@@ -27,27 +27,64 @@ std::vector<Factor> condition(
     const std::vector<Factor>& factors,
     const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
 
+Factor condition(const Factor& factor, const Assignment& assignment);
+
+Assignment sample(const Factor& factor);
+
+class SampleGenerator
+{
+public:
+  SampleGenerator(const BayesianNetwork& bn);
+  Assignment sample() const;
+
+private:
+  const BayesianNetwork& bn_;
+  std::vector<Variable::Name> order_;
+};
+
+Assignment sample(const BayesianNetwork& bn);
+
+bool isConsistent(
+    const Assignment& assignment,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
+
+struct ExactInference
+{
+};
+
+struct VariableElimination
+{
+  std::vector<Variable::Name> ordering;
+};
+
+struct DirectSampling
+{
+  int num_samples;
+};
+
 Factor
-infer(const BayesianNetwork& bn,
+infer(const ExactInference& method,
+      const BayesianNetwork& bn,
       const std::vector<Variable::Name>& query,
       const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
 
 Factor
-infer(const std::vector<Factor>& factors,
+infer(const VariableElimination& method,
+      const BayesianNetwork& bn,
       const std::vector<Variable::Name>& query,
       const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
 
 Factor
-infer(const BayesianNetwork& bn,
+infer(const DirectSampling& method,
+      const BayesianNetwork& bn,
       const std::vector<Variable::Name>& query,
-      const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
-      const std::vector<Variable::Name>& ordering);
+      const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
 
 Factor
-infer(const std::vector<Factor>& factors,
+infer(const LikelihoodWeightedSampling& method,
+      const BayesianNetwork& bn,
       const std::vector<Variable::Name>& query,
-      const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
-      const std::vector<Variable::Name>& ordering);
+      const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
 } // namespace algo_dm
 
 #include <algo_dm/inl/inference.inl>

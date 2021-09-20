@@ -1,6 +1,7 @@
 #include <algo_dm/inference.hpp>
 
 #include <algorithm>
+#include <cstdlib>
 #include <numeric>
 
 namespace algo_dm
@@ -72,6 +73,15 @@ condition(const Factor& factor,
       evidence.cbegin(), evidence.cend(), factor, condition_fold);
 }
 
+Factor condition(const Factor& factor, const Assignment& assignment)
+{
+  const auto& vars = assignment.getVariableNames();
+  auto condition_fold = [&assignment](const auto& f, const auto& v) {
+    return condition(f, v, assignment.get(v).value());
+  };
+  return std::accumulate(vars.cbegin(), vars.cend(), factor, condition_fold);
+}
+
 std::vector<Factor>
 condition(const std::vector<Factor>& factors,
           const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
@@ -84,19 +94,77 @@ condition(const std::vector<Factor>& factors,
   return std::vector(condition_view.begin(), condition_view.end());
 }
 
-Factor
-infer(const BayesianNetwork& bn,
-      const std::vector<Variable::Name>& query,
-      const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+Assignment sample(const Factor& factor)
 {
-  return infer(bn.getFactors(), query, evidence);
+  const auto& table = factor.getFactorTable();
+  const auto& assignments = table.getAssignments();
+
+  auto get_prob = [&table](const auto& a) { return table.get(a).value(); };
+  auto prob_view = assignments | std::views::transform(get_prob);
+
+  const auto w = std::accumulate(prob_view.begin(), prob_view.end(), 0.0);
+  auto total_prob = 0.0;
+  auto p = static_cast<double>(std::rand()) / RAND_MAX;
+
+  for (const auto& assignment : assignments)
+  {
+    total_prob += table.get(assignment).value() / w;
+    if (total_prob >= p)
+      return assignment;
+  }
+  return assignments.back(); // should never happen
+}
+
+SampleGenerator::SampleGenerator(const BayesianNetwork& bn)
+    : bn_(bn), order_(topoSort(bn.getGraph()))
+{
+}
+
+Assignment SampleGenerator::sample() const
+{
+  auto assignment = Assignment();
+  for (const auto& node : order_)
+  {
+    const auto& factor = bn_.getFactor(node);
+    auto conditioned_factor = condition(factor, assignment);
+    auto random_assignment = algo_dm::sample(conditioned_factor);
+    auto value = random_assignment.get(node).value();
+    assignment.set(node, value);
+  }
+  return assignment;
+}
+
+Assignment sample(const BayesianNetwork& bn)
+{
+  auto generator = SampleGenerator(bn);
+  return generator.sample();
+}
+
+bool isConsistent(
+    const Assignment& assignment,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+{
+  auto vars = evidence | std::views::keys;
+
+  auto get_e = [& e = evidence](const auto& var) { return e.at(var); };
+  auto e_vals = vars | std::views::transform(get_e);
+
+  auto get_a = [& a = assignment](const auto& var) {
+    return a.get(var).has_value() ? a.get(var).value() : -1;
+  };
+  auto a_vals = vars | std::views::transform(get_a);
+
+  return std::ranges::equal(e_vals, a_vals);
 }
 
 Factor
-infer(const std::vector<Factor>& factors,
+infer(const ExactInference&,
+      const BayesianNetwork& bn,
       const std::vector<Variable::Name>& query,
       const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
 {
+  const auto& factors = bn.getFactors();
+
   auto inference = product(factors);
   inference = condition(inference, evidence);
 
@@ -108,14 +176,16 @@ infer(const std::vector<Factor>& factors,
 }
 
 Factor
-infer(const std::vector<Factor>& factors,
+infer(const VariableElimination& method,
+      const BayesianNetwork& bn,
       const std::vector<Variable::Name>& query,
-      const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
-      const std::vector<Variable::Name>& ordering)
+      const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
 {
+  const auto& factors = bn.getFactors();
+
   auto reduced_factors = condition(factors, evidence);
 
-  auto all_names = setUnion(ordering, getNames(reduced_factors));
+  auto all_names = setUnion(method.ordering, getNames(reduced_factors));
 
   auto depends_on = [](const auto& n) {
     return [&n](const auto& f) { return isInScope(f, n); };
@@ -148,11 +218,28 @@ infer(const std::vector<Factor>& factors,
 }
 
 Factor
-infer(const BayesianNetwork& bn,
+infer(const DirectSampling& method,
+      const BayesianNetwork& bn,
       const std::vector<Variable::Name>& query,
-      const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
-      const std::vector<Variable::Name>& ordering)
+      const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
 {
-  return infer(bn.getFactors(), query, evidence, ordering);
+  auto table = FactorTable();
+  auto generator = SampleGenerator(bn);
+
+  for (auto i = 0; i < method.num_samples; ++i)
+  {
+    auto assignment = generator.sample();
+    if (isConsistent(assignment, evidence))
+    {
+      auto sub_assignment = select(assignment, query);
+      auto prev_p = table.get(sub_assignment);
+      auto p = prev_p.has_value() ? prev_p.value() + 1.0 : 1.0;
+      table.set(sub_assignment, p);
+    }
+  }
+  table.normalize();
+
+  auto vars = select(bn.getVariables(), query);
+  return Factor(vars, table);
 }
 } // namespace algo_dm

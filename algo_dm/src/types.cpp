@@ -390,6 +390,16 @@ Assignment select(const Assignment& assignment,
   return sub_assignment;
 }
 
+std::vector<Variable> select(const std::vector<Variable>& variables,
+                             const std::vector<Variable::Name>& variable_names)
+{
+  auto is_selected = [& n = variable_names](const Variable& v) {
+    return contains(n, v.getName());
+  };
+  auto vars_view = variables | std::views::filter(is_selected);
+  return std::vector(vars_view.begin(), vars_view.end());
+}
+
 std::vector<Variable> erase(const std::vector<Variable>& variables,
                             const Variable::Name& name)
 {

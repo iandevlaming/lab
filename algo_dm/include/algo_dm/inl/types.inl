@@ -168,7 +168,6 @@ std::vector<NodeT> topoSort(const AdjacencyList<NodeT>& graph)
     for (const auto& child : graph.getEdges(cur_node))
     {
       --num_parents[child];
-      std::cout << child << ": " << num_parents[child] << std::endl;
       if (num_parents[child] == 0)
         node_queue.push_back(child);
     }
