@@ -5,6 +5,7 @@
 #include <map>
 #include <optional>
 #include <ranges>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -15,25 +16,21 @@ template <template <typename, typename, typename...> typename MapT,
           typename Key,
           typename Value,
           typename... Args>
-std::vector<Key> getKeys(const MapT<Key, Value, Args...>& map)
-{
-  auto select_keys = [](const auto& p) { return p.first; };
-  auto keys_view = std::views::transform(map, select_keys);
-  return std::vector<Key>(keys_view.begin(), keys_view.end());
-}
+std::vector<Key> getKeys(const MapT<Key, Value, Args...>& map);
 
-template <template <typename...> typename C, typename... Ts>
-bool isPermutation(const C<Ts...>& container_1, const C<Ts...>& container_2)
-{
-  auto is_in = [](const auto& cont_1) {
-    return [&cont_1](const auto& elem_2) {
-      return std::ranges::find(cont_1, elem_2) != cont_1.cend();
-    };
-  };
+template <typename C>
+bool isPermutation(const C& container_1, const C& container_2);
 
-  return (container_1.size() == container_2.size()) &&
-         std::ranges::all_of(container_1, is_in(container_2));
-}
+template <template <typename, typename...> typename C,
+          typename T,
+          typename... Ts>
+bool contains(const C<T, Ts...>& container, const T& element);
+
+template <typename C>
+C setDiff(const C& super_set, const C& disjoint_set);
+
+template <typename C>
+C setUnion(const C& a, const C& b);
 
 // TODO: it might be interesting to have the assignment templated on its
 // variable names (will have to use a int id probably), so that the factor table
@@ -120,27 +117,12 @@ private:
 
 bool operator==(const FactorTable& lhs, const FactorTable& rhs);
 
-template <typename MapT>
-void FactorTable::checkInput(const MapT& table)
-{
-  if (!table.empty())
-  {
-    variable_names_ = table.cbegin()->first.getVariableNames();
-    auto has_bad_keys = [&](const auto& p) {
-      return p.first.getVariableNames() != variable_names_;
-    };
-
-    if (std::ranges::any_of(table, has_bad_keys))
-      throw std::invalid_argument(
-          "All Assignments in a FactorTable must have the same keys");
-  }
-}
-
 std::ostream& operator<<(std::ostream& os, const FactorTable& table);
 
 class Factor
 {
 public:
+  Factor() = default;
   Factor(const std::vector<Variable>& variables, const FactorTable& table);
   Factor(std::vector<Variable>&& variables, FactorTable&& table);
   const std::vector<Variable>& getVariables() const;
@@ -156,33 +138,56 @@ bool operator==(const Factor& lhs, const Factor& rhs);
 
 std::ostream& operator<<(std::ostream& os, const Factor& f);
 
+Factor operator*(const Factor& lhs, const Factor& rhs);
+
+bool isInScope(const Factor& factor, const Variable::Name name);
+
+std::vector<Variable::Name> getNames(const std::vector<Factor>& factors);
+
+template <typename NodeT, bool = std::is_integral_v<NodeT>>
 class AdjacencyList
 {
 public:
-  AdjacencyList(int num_nodes);
-  int getNumNodes() const;
-  void addEdge(int from_node, int to_node);
-  const std::unordered_set<int>& getEdges(int node) const;
+  AdjacencyList() = default;
+  std::unordered_set<NodeT> getNodes() const;
+  void addEdge(NodeT from_node, NodeT to_node);
+  const std::unordered_set<NodeT>& getEdges(NodeT node) const;
 
 private:
-  int num_nodes_;
-  std::vector<std::unordered_set<int>> graph_;
+  std::unordered_map<NodeT, std::unordered_set<NodeT>> graph_;
 };
+
+template <typename NodeT>
+class AdjacencyList<NodeT, false>
+{
+public:
+  AdjacencyList() = default;
+  std::unordered_set<NodeT> getNodes() const;
+  void addEdge(const NodeT& from_node, const NodeT& to_node);
+  const std::unordered_set<NodeT>& getEdges(const NodeT& node) const;
+
+private:
+  std::unordered_map<NodeT, std::unordered_set<NodeT>> graph_;
+};
+
+template <typename NodeT>
+std::vector<NodeT> topoSort(const AdjacencyList<NodeT>& graph);
 
 class BayesianNetwork
 {
 public:
-  BayesianNetwork(const std::vector<Variable>& variables,
-                  const std::vector<Factor>& factors,
-                  const AdjacencyList& graph);
-  const std::vector<Variable>& getVariables() const;
-  const std::vector<Factor>& getFactors() const;
-  const AdjacencyList& getGraph() const;
+  BayesianNetwork() = default;
+  BayesianNetwork(const std::unordered_map<Variable::Name, Factor>& nodes,
+                  const AdjacencyList<Variable::Name>& graph);
+  std::vector<Variable> getVariables() const;
+  std::vector<Factor> getFactors() const;
+  const std::unordered_map<Variable::Name, Factor> getNodes() const;
+  const AdjacencyList<Variable::Name>& getGraph() const;
+  const Factor getFactor(const Variable::Name& node) const;
 
 private:
-  std::vector<Variable> variables_;
-  std::vector<Factor> factors_;
-  AdjacencyList graph_;
+  std::unordered_map<Variable::Name, Factor> nodes_;
+  AdjacencyList<Variable::Name> graph_;
 };
 
 Assignment select(const Assignment& assignment,
@@ -202,3 +207,5 @@ std::vector<Assignment> assign(const std::vector<Variable>& variables);
 double computeProbability(const std::vector<FactorTable>& tables,
                           const Assignment& assignment);
 } // namespace algo_dm
+
+#include <algo_dm/inl/types.inl>

@@ -173,7 +173,7 @@ TEST(FactorTableTest, EmptyConstructionTest)
     EXPECT_TRUE(table.getVariableNames().empty());
   }
 
-  auto is_matching = [&t = empty_tables.front()](const auto& table) {
+  auto is_matching = [& t = empty_tables.front()](const auto& table) {
     return table == t;
   };
   EXPECT_TRUE(std::ranges::all_of(empty_tables, is_matching));
@@ -251,7 +251,7 @@ TEST(FactorTableTest, LateInitializationTest)
               std::vector<ad::Assignment::Key>({var_name}));
   }
 
-  auto is_matching = [&t = test_tables.front()](const auto& table) {
+  auto is_matching = [& t = test_tables.front()](const auto& table) {
     return table == t;
   };
   EXPECT_TRUE(std::ranges::all_of(test_tables, is_matching));
@@ -424,6 +424,55 @@ TEST(computeProbabilityTest, Example2P5)
   auto expected_probability = 0.034228655999999996;
 
   EXPECT_DOUBLE_EQ(total_probability, expected_probability);
+}
+
+TEST(TopoSortTest, Cycle)
+{
+  // a --> b --> c
+  //         <--
+  auto graph = ad::AdjacencyList<std::string>();
+  graph.addEdge("a", "b");
+  graph.addEdge("b", "c");
+  graph.addEdge("c", "a");
+
+  EXPECT_THROW(topoSort(graph), std::invalid_argument);
+}
+
+TEST(TopoSortTest, Simple)
+{
+  // a --> b --> c --> d
+  auto graph = ad::AdjacencyList<std::string>();
+  graph.addEdge("a", "b");
+  graph.addEdge("b", "c");
+  graph.addEdge("c", "d");
+
+  auto sorted_nodes = topoSort(graph);
+  auto expected_nodes = std::vector<std::string>({"a", "b", "c", "d"});
+
+  EXPECT_EQ(sorted_nodes, expected_nodes);
+}
+
+TEST(TopoSortTest, Branch)
+{
+  // a ---> c --> d -- > e
+  //        b _/
+  auto graph = ad::AdjacencyList<std::string>();
+  graph.addEdge("a", "c");
+  graph.addEdge("c", "d");
+  graph.addEdge("b", "d");
+  graph.addEdge("d", "e");
+
+  auto sorted_nodes = topoSort(graph);
+  auto sorted_head =
+      std::vector(sorted_nodes.cbegin(), sorted_nodes.cbegin() + 2);
+  auto sorted_tail =
+      std::vector(sorted_nodes.cbegin() + 2, sorted_nodes.cend());
+
+  auto expected_head = std::vector<std::string>({"a", "b"});
+  auto expected_tail = std::vector<std::string>({"c", "d", "e"});
+
+  EXPECT_TRUE(ad::isPermutation(sorted_head, expected_head));
+  EXPECT_EQ(sorted_tail, expected_tail);
 }
 
 int main(int argc, char** argv)

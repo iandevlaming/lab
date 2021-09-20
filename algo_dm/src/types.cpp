@@ -272,50 +272,107 @@ bool operator==(const Factor& lhs, const Factor& rhs)
   return equal;
 }
 
-AdjacencyList::AdjacencyList(int num_nodes)
-    : num_nodes_(num_nodes),
-      graph_(std::vector<std::unordered_set<int>>(num_nodes,
-                                                  std::unordered_set<int>()))
+bool isInScope(const Factor& factor, const Variable::Name name)
+{
+  auto is_named = [](const auto& var_name) {
+    return [&var_name](const auto& var) { return var.getName() == var_name; };
+  };
+
+  return std::ranges::any_of(factor.getVariables(), is_named(name));
+}
+
+Factor operator*(const Factor& lhs, const Factor& rhs)
+{
+  const auto& lhs_vars = lhs.getVariables();
+  const auto& rhs_vars = rhs.getVariables();
+
+  const auto& lhs_table = lhs.getFactorTable();
+  const auto& rhs_table = rhs.getFactorTable();
+
+  const auto rhs_names = getNames(rhs_vars);
+
+  const auto rhs_only_vars = setDiff(rhs_vars, lhs_vars);
+  const auto rhs_only_assignments = rhs_only_vars.empty()
+                                        ? std::vector({Assignment()})
+                                        : assign(rhs_only_vars);
+
+  auto merged_table = FactorTable();
+  for (const auto& lhs_assignment : lhs_table.getAssignments())
+  {
+    for (const auto& rhs_only_assignment : rhs_only_assignments)
+    {
+      auto merged_assignment = rhs_only_assignment;
+      for (const auto& lhs_var_name : lhs_assignment.getVariableNames())
+        merged_assignment.set(lhs_var_name,
+                              lhs_assignment.get(lhs_var_name).value());
+
+      const auto rhs_assignment = select(merged_assignment, rhs_names);
+      const auto merged_probability = lhs_table.get(lhs_assignment).value() *
+                                      rhs_table.get(rhs_assignment).value();
+
+      merged_table.set(merged_assignment, merged_probability);
+    }
+  }
+
+  auto merged_vars = lhs_vars;
+  std::ranges::copy(rhs_only_vars, std::back_inserter(merged_vars));
+
+  return Factor(merged_vars, merged_table);
+}
+
+std::vector<Variable::Name> getNames(const std::vector<Factor>& factors)
+{
+  auto get_names = [](const auto& names, const auto& factor) {
+    return setUnion(names, getNames(factor.getVariables()));
+  };
+  return std::accumulate(factors.cbegin(),
+                         factors.cend(),
+                         std::vector<Variable::Name>(),
+                         get_names);
+}
+
+BayesianNetwork::BayesianNetwork(
+    const std::unordered_map<Variable::Name, Factor>& nodes,
+    const AdjacencyList<Variable::Name>& graph)
+    : nodes_(nodes), graph_(graph)
 {
 }
 
-int AdjacencyList::getNumNodes() const { return num_nodes_; }
-
-void AdjacencyList::addEdge(int from_node, int to_node)
+std::vector<Variable> BayesianNetwork::getVariables() const
 {
-  if (from_node >= num_nodes_ || to_node >= num_nodes_)
-    throw std::invalid_argument("Edges must be between nodes on the graph");
-
-  graph_[from_node].insert(to_node);
-}
-const std::unordered_set<int>& AdjacencyList::getEdges(int node) const
-{
-  if (node >= num_nodes_)
-    throw std::invalid_argument("Cannot get edges for nodes off of the graph");
-
-  return graph_[node];
+  auto get_variables = [](const auto& f) { return f.getVariables(); };
+  auto variables_view = std::ranges::views::common(
+      nodes_ | std::views::values | std::views::transform(get_variables));
+  auto join = [](const auto& lhs, const auto& rhs) {
+    return setUnion(lhs, rhs);
+  };
+  return std::accumulate(variables_view.begin(),
+                         variables_view.end(),
+                         std::vector<Variable>(),
+                         join);
 }
 
-BayesianNetwork::BayesianNetwork(const std::vector<Variable>& variables,
-                                 const std::vector<Factor>& factors,
-                                 const AdjacencyList& graph)
-    : variables_(variables), factors_(factors), graph_(graph)
+std::vector<Factor> BayesianNetwork::getFactors() const
 {
-  if (variables_.size() != factors.size())
-    throw std::invalid_argument("Every node must have a factor");
+  auto values_view = std::ranges::views::common(nodes_ | std::views::values);
+  return std::vector(values_view.begin(), values_view.end());
 }
 
-const std::vector<Variable>& BayesianNetwork::getVariables() const
+const std::unordered_map<Variable::Name, Factor>
+BayesianNetwork::getNodes() const
 {
-  return variables_;
+  return nodes_;
 }
 
-const std::vector<Factor>& BayesianNetwork::getFactors() const
+const AdjacencyList<Variable::Name>& BayesianNetwork::getGraph() const
 {
-  return factors_;
+  return graph_;
 }
 
-const AdjacencyList& BayesianNetwork::getGraph() const { return graph_; }
+const Factor BayesianNetwork::getFactor(const Variable::Name& node) const
+{
+  return nodes_.at(node);
+}
 
 Assignment select(const Assignment& assignment,
                   const std::vector<Variable::Name>& variable_names)
