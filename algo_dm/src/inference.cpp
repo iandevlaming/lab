@@ -246,4 +246,50 @@ Factor infer<DirectSampling>(
   return Factor(vars, table);
 }
 
+template <>
+Factor infer<LikelihoodWeightedSampling>(
+    const LikelihoodWeightedSampling& method,
+    const BayesianNetwork& bn,
+    const std::vector<Variable::Name>& query,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+{
+  const auto& factors = bn.getFactors();
+  const auto ordering = topoSort(bn.getGraph());
+
+  auto table = FactorTable();
+  for (auto i = 0; i < method.num_samples; ++i)
+  {
+    auto assignment = Assignment();
+    auto weight = 1.0;
+
+    for (const auto& var : ordering)
+    {
+      const auto& factor = bn.getFactor(var);
+      if (evidence.contains(var))
+      {
+        assignment.set(var, evidence.at(var));
+        const auto var_names = getNames(factor.getVariables());
+        const auto sub_assignment = select(assignment, var_names);
+        const auto& f_table = factor.getFactorTable();
+        weight *= f_table.get(sub_assignment);
+      }
+      else
+      {
+        auto conditioned_factor = condition(factor, assignment);
+        auto sample_assignment = sample(conditioned_factor);
+        assignment.set(var, sample_assignment.get(var));
+      }
+    }
+
+    auto entry_assignment = select(assignment, query);
+    if (table.contains(entry_assignment))
+      weight += table.get(entry_assignment);
+    table.set(entry_assignment, weight);
+  }
+
+  table.normalize();
+  auto vars = select(bn.getVariables(), query);
+  return Factor(vars, table);
+}
+
 } // namespace algo_dm

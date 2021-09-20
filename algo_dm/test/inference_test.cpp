@@ -122,6 +122,37 @@ protected:
     expected_table_.normalize();
   }
 
+  bool isOrderedCorrectly(const ad::Factor& result)
+  {
+    const auto& table = result.getFactorTable();
+    const auto& assignments = expected_table_.getAssignments();
+
+    auto get_prob_of = [](const auto& t) {
+      return [&t](const auto& a) { return t.get(a); };
+    };
+    auto expected_prob_view =
+        assignments | std::views::transform(get_prob_of(expected_table_));
+    auto expected_prob =
+        std::vector(expected_prob_view.begin(), expected_prob_view.end());
+
+    auto prob_view = assignments | std::views::transform(get_prob_of(table));
+    auto prob = std::vector(prob_view.begin(), prob_view.end());
+
+    auto sorted_idx_view =
+        std::views::iota(0, static_cast<int>(assignments.size()));
+    auto sorted_idx =
+        std::vector(sorted_idx_view.begin(), sorted_idx_view.end());
+    auto sort_indices_using = [](const auto& c) {
+      return [&c](auto i, auto j) { return c[i] < c[j]; };
+    };
+    std::ranges::sort(sorted_idx, sort_indices_using(expected_prob));
+
+    auto access = [](const auto& c) { return [&c](auto i) { return c[i]; }; };
+    auto sorted_prob = sorted_idx | std::views::transform(access(prob));
+
+    return std::ranges::is_sorted(sorted_prob);
+  }
+
   std::vector<ad::Variable> variables_;
   ad::BayesianNetwork bayesian_network_;
   std::vector<ad::Variable::Name> query_;
@@ -150,37 +181,22 @@ TEST_F(Exercise3P4, SumProductVariableEliminatioInferenceTest)
   EXPECT_EQ(factor_c.getFactorTable(), expected_table_);
 }
 
-TEST_F(Exercise3P4, DirectSampling)
+TEST_F(Exercise3P4, LikelihoodWeightedSampling)
 {
-  const auto method = ad::DirectSampling({10000});
+  const auto num_samples = 10000; // needed to ensure sampling all values of c
+  const auto method = ad::DirectSampling({num_samples});
   const auto factor_c = ad::infer(method, bayesian_network_, query_, evidence_);
 
-  const auto& table = factor_c.getFactorTable();
-  const auto& assignments = table.getAssignments();
+  EXPECT_TRUE(isOrderedCorrectly(factor_c));
+}
 
-  auto get_prob_of = [](const auto& t) {
-    return [&t](const auto& a) { return t.get(a); };
-  };
-  auto expected_prob_view =
-      assignments | std::views::transform(get_prob_of(expected_table_));
-  auto expected_prob =
-      std::vector(expected_prob_view.begin(), expected_prob_view.end());
+TEST_F(Exercise3P4, DirectSampling)
+{
+  const auto num_samples = 10000; // needed to ensure sampling all values of c
+  const auto method = ad::LikelihoodWeightedSampling({num_samples});
+  const auto factor_c = ad::infer(method, bayesian_network_, query_, evidence_);
 
-  auto prob_view = assignments | std::views::transform(get_prob_of(table));
-  auto prob = std::vector(prob_view.begin(), prob_view.end());
-
-  auto sorted_idx_view =
-      std::views::iota(0, static_cast<int>(assignments.size()));
-  auto sorted_idx = std::vector(sorted_idx_view.begin(), sorted_idx_view.end());
-  auto sort_indices_using = [](const auto& c) {
-    return [&c](auto i, auto j) { return c[i] < c[j]; };
-  };
-  std::ranges::sort(sorted_idx, sort_indices_using(expected_prob));
-
-  auto access = [](const auto& c) { return [&c](auto i) { return c[i]; }; };
-  auto sorted_prob = sorted_idx | std::views::transform(access(prob));
-
-  EXPECT_TRUE(std::ranges::is_sorted(sorted_prob));
+  EXPECT_TRUE(isOrderedCorrectly(factor_c));
 }
 
 int main(int argc, char** argv)

@@ -62,7 +62,12 @@ struct DirectSampling
   int num_samples;
 };
 
+struct LikelihoodWeightedSampling
+{
+  int num_samples;
+};
 
+template <typename MethodT>
 Factor
 infer(const MethodT& method,
       const BayesianNetwork& bn,
