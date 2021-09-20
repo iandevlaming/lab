@@ -3,31 +3,51 @@
 #include <algo_dm/types.hpp>
 
 #include <ranges>
+#include <unordered_map>
 
 namespace algo_dm
 {
 template <template <typename...> typename C, typename... Ts>
-C<Ts...> setDiff(const C<Ts...>& super_set, const C<Ts...>& disjoint_set)
-{
-  auto is_not_in = [](const auto& set_1) {
-    return [&set_1](const auto& elem_2) {
-      return std::ranges::find(set_1, elem_2) == set_1.cend();
-    };
-  };
-
-  auto sub_set_view = std::views::filter(super_set, is_not_in(disjoint_set));
-  auto sub_set = C<Ts...>(sub_set_view.begin(), sub_set_view.end());
-
-  return sub_set;
-}
-
-Factor operator*(const Factor& lhs, const Factor& rhs);
+Factor product(const C<Factor, Ts...>& factors);
 
 Factor marginalize(const Factor& factor, const Variable::Name name);
 
-bool inScope(const Factor& factor, const Variable::Name name);
+Factor marginalize(const Factor& factor,
+                   const std::vector<Variable::Name> names);
 
 Factor condition(const Factor& factor,
                  const Variable::Name name,
                  const Assignment::Value& value);
+
+Factor condition(
+    const Factor& factor,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
+
+std::vector<Factor> condition(
+    const std::vector<Factor>& factors,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
+
+Factor
+infer(const BayesianNetwork& bn,
+      const std::vector<Variable::Name>& query,
+      const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
+
+Factor
+infer(const std::vector<Factor>& factors,
+      const std::vector<Variable::Name>& query,
+      const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
+
+Factor
+infer(const BayesianNetwork& bn,
+      const std::vector<Variable::Name>& query,
+      const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
+      const std::vector<Variable::Name>& ordering);
+
+Factor
+infer(const std::vector<Factor>& factors,
+      const std::vector<Variable::Name>& query,
+      const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
+      const std::vector<Variable::Name>& ordering);
 } // namespace algo_dm
+
+#include <algo_dm/inl/inference.inl>

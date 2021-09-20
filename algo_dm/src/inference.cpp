@@ -1,46 +1,10 @@
 #include <algo_dm/inference.hpp>
 
 #include <algorithm>
+#include <numeric>
 
 namespace algo_dm
 {
-Factor operator*(const Factor& lhs, const Factor& rhs)
-{
-  const auto& lhs_vars = lhs.getVariables();
-  const auto& rhs_vars = rhs.getVariables();
-
-  const auto& lhs_table = lhs.getFactorTable();
-  const auto& rhs_table = rhs.getFactorTable();
-
-  const auto rhs_names = getNames(rhs_vars);
-
-  const auto rhs_only_vars = setDiff(rhs_vars, lhs_vars);
-  const auto rhs_only_assignments = assign(rhs_only_vars);
-
-  auto merged_table = FactorTable();
-  for (const auto& lhs_assignment : lhs_table.getAssignments())
-  {
-    for (const auto& rhs_only_assignment : rhs_only_assignments)
-    {
-      auto merged_assignment = rhs_only_assignment;
-      for (const auto& lhs_var_name : lhs_assignment.getVariableNames())
-        merged_assignment.set(lhs_var_name,
-                              lhs_assignment.get(lhs_var_name).value());
-
-      const auto rhs_assignment = select(merged_assignment, rhs_names);
-      const auto merged_probability = lhs_table.get(lhs_assignment).value() *
-                                      rhs_table.get(rhs_assignment).value();
-
-      merged_table.set(merged_assignment, merged_probability);
-    }
-  }
-
-  auto merged_vars = lhs_vars;
-  std::ranges::copy(rhs_only_vars, std::back_inserter(merged_vars));
-
-  return Factor(merged_vars, merged_table);
-}
-
 Factor marginalize(const Factor& factor, const Variable::Name name)
 {
   auto marginalized_table = FactorTable();
@@ -61,20 +25,23 @@ Factor marginalize(const Factor& factor, const Variable::Name name)
   return Factor(reduced_vars, marginalized_table);
 }
 
-bool inScope(const Factor& factor, const Variable::Name name)
+Factor marginalize(const Factor& factor,
+                   const std::vector<Variable::Name> names)
 {
-  auto is_named = [](const auto& var_name) {
-    return [&var_name](const auto& var) { return var.getName() == var_name; };
-  };
+  if (names.empty())
+    return factor;
 
-  return std::ranges::any_of(factor.getVariables(), is_named(name));
+  auto apply_margin = [](const auto& f, const auto& name) {
+    return marginalize(f, name);
+  };
+  return std::accumulate(names.cbegin(), names.cend(), factor, apply_margin);
 }
 
 Factor condition(const Factor& factor,
                  const Variable::Name name,
                  const Assignment::Value& value)
 {
-  if (!inScope(factor, name))
+  if (!isInScope(factor, name))
     return factor;
 
   auto conditioned_table = FactorTable();
@@ -92,5 +59,100 @@ Factor condition(const Factor& factor,
 
   auto reduced_vars = erase(factor.getVariables(), name);
   return Factor(reduced_vars, conditioned_table);
+}
+
+Factor
+condition(const Factor& factor,
+          const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+{
+  auto condition_fold = [](const auto& f, const auto& e) {
+    return condition(f, e.first, e.second);
+  };
+  return std::accumulate(
+      evidence.cbegin(), evidence.cend(), factor, condition_fold);
+}
+
+std::vector<Factor>
+condition(const std::vector<Factor>& factors,
+          const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+{
+  auto condition_on = [](const auto& e) {
+    return [&e](const auto& factor) { return condition(factor, e); };
+  };
+  auto condition_view =
+      factors | std::views::transform(condition_on((evidence)));
+  return std::vector(condition_view.begin(), condition_view.end());
+}
+
+Factor
+infer(const BayesianNetwork& bn,
+      const std::vector<Variable::Name>& query,
+      const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+{
+  return infer(bn.getFactors(), query, evidence);
+}
+
+Factor
+infer(const std::vector<Factor>& factors,
+      const std::vector<Variable::Name>& query,
+      const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+{
+  auto inference = product(factors);
+  inference = condition(inference, evidence);
+
+  auto non_query = setDiff(getNames(inference.getVariables()), query);
+  inference = marginalize(inference, non_query);
+
+  inference.normalize();
+  return inference;
+}
+
+Factor
+infer(const std::vector<Factor>& factors,
+      const std::vector<Variable::Name>& query,
+      const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
+      const std::vector<Variable::Name>& ordering)
+{
+  auto reduced_factors = condition(factors, evidence);
+
+  auto all_names = setUnion(ordering, getNames(reduced_factors));
+
+  auto depends_on = [](const auto& n) {
+    return [&n](const auto& f) { return isInScope(f, n); };
+  };
+  for (const auto& name : all_names)
+  {
+    if (!contains(query, name))
+    {
+      auto dependent_factors_view =
+          reduced_factors | std::views::filter(depends_on(name));
+      auto dependent_factors = std::vector(dependent_factors_view.begin(),
+                                           dependent_factors_view.end());
+
+      if (!dependent_factors.empty())
+      {
+        auto reduced_factor = product(dependent_factors);
+        reduced_factor = marginalize(reduced_factor, name);
+
+        auto remove_itrs =
+            std::ranges::remove_if(reduced_factors, depends_on(name));
+        reduced_factors.erase(remove_itrs.begin(), remove_itrs.end());
+        reduced_factors.push_back(reduced_factor);
+      }
+    }
+  }
+
+  auto reduced_factor = product(reduced_factors);
+  reduced_factor.normalize();
+  return reduced_factor;
+}
+
+Factor
+infer(const BayesianNetwork& bn,
+      const std::vector<Variable::Name>& query,
+      const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
+      const std::vector<Variable::Name>& ordering)
+{
+  return infer(bn.getFactors(), query, evidence, ordering);
 }
 } // namespace algo_dm

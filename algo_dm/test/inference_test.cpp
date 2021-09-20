@@ -70,6 +70,83 @@ TEST(ConditionTest, Example3P3)
   EXPECT_EQ(conditioned_factor, expected_factor);
 }
 
+class Exercise3P4 : public ::testing::Test
+{
+protected:
+  Exercise3P4()
+  {
+    const auto c = ad::Variable(
+        "c", 3); // c (class) in {vehicle (0), pedestrian (1), ball (2)}
+    const auto s =
+        ad::Variable("s", 3); // s (size) in {small (0), medium (1), large (2)}
+    const auto v = ad::Variable(
+        "v", 3); // v (velocity) in {slow (0), moderate (1), fast(2)}
+    variables_ = {c, s, v};
+
+    const auto p_c =
+        ad::FactorTable(ad::assign({c}), std::vector{0.80, 0.19, 0.01});
+    const auto node_c = ad::Factor({c}, p_c);
+
+    const auto p_s_given_c = ad::FactorTable(
+        ad::assign({c, s}),
+        std::vector{
+            0.001, 0.009, 0.990, 0.200, 0.75, 0.050, 0.800, 0.199, 0.001});
+    const auto node_s = ad::Factor({c, s}, p_s_given_c);
+
+    const auto p_v_given_c = ad::FactorTable(
+        ad::assign({c, v}),
+        std::vector({0.2, 0.2, 0.6, 0.5, 0.4, 0.1, 0.4, 0.4, 0.2}));
+    const auto node_v = ad::Factor({c, v}, p_v_given_c);
+
+    auto nodes = std::unordered_map<ad::Variable::Name, ad::Factor>();
+    nodes[c.getName()] = node_c;
+    nodes[s.getName()] = node_s;
+    nodes[v.getName()] = node_v;
+
+    auto graph = ad::AdjacencyList<ad::Variable::Name>();
+    graph.addEdge(c.getName(), s.getName());
+    graph.addEdge(c.getName(), v.getName());
+
+    bayesian_network_ = ad::BayesianNetwork(nodes, graph);
+
+    query_.push_back(c.getName());
+
+    evidence_[s.getName()] = 1;
+    evidence_[v.getName()] = 0;
+
+    const auto p_0 = 0.80 * 0.009 * 0.2;
+    const auto p_1 = 0.19 * 0.750 * 0.5;
+    const auto p_2 = 0.01 * 0.199 * 0.4;
+
+    expected_table_ = ad::FactorTable(ad::assign({c}), {p_0, p_1, p_2});
+    expected_table_.normalize();
+  }
+
+  std::vector<ad::Variable> variables_;
+  ad::BayesianNetwork bayesian_network_;
+  std::vector<ad::Variable::Name> query_;
+  std::unordered_map<ad::Variable::Name, ad::Assignment::Value> evidence_;
+  ad::FactorTable expected_table_;
+};
+
+TEST_F(Exercise3P4, ExactInferenceTest)
+{
+  auto factor_c = ad::infer(bayesian_network_, query_, evidence_);
+
+  EXPECT_EQ(factor_c.getFactorTable(), expected_table_);
+}
+
+TEST_F(Exercise3P4, SumProductVariableEliminatioInferenceTest)
+{
+  auto get_name = [](const auto& v) { return v.getName(); };
+  auto ordering_view =
+      variables_ | std::views::transform(get_name) | std::views::reverse;
+  auto ordering = std::vector(ordering_view.begin(), ordering_view.end());
+  auto factor_c = ad::infer(bayesian_network_, query_, evidence_, ordering);
+
+  EXPECT_EQ(factor_c.getFactorTable(), expected_table_);
+}
+
 int main(int argc, char** argv)
 {
   ::testing::InitGoogleTest(&argc, argv);
