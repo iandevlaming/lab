@@ -19,7 +19,10 @@ cc_library(
 cc_library(
     name = "types_cc",
     srcs = ["src/types.cpp"],
-    hdrs = ["include/algo_dm/types.hpp"],
+    hdrs = [
+        "include/algo_dm/types.hpp",
+        "include/algo_dm/inl/types.inl",
+        ],
     copts = copts,
     strip_include_prefix = "include",
     deps = [
@@ -30,7 +33,10 @@ cc_library(
 cc_library(
     name = "inference_cc",
     srcs = ["src/inference.cpp"],
-    hdrs = ["include/algo_dm/inference.hpp"],
+    hdrs = [
+        "include/algo_dm/inference.hpp",
+        "include/algo_dm/inl/inference.inl"
+        ],
     copts = copts,
     strip_include_prefix = "include",
     deps = [
