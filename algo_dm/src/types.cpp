@@ -59,11 +59,14 @@ Assignment::Assignment(const std::map<Key, Value>& assignment)
 
 void Assignment::set(const Key& key, Value value) { assignment_[key] = value; }
 
-std::optional<Assignment::Value> Assignment::get(const Key& key) const
+const Assignment::Value& Assignment::get(const Key& key) const
 {
-  if (assignment_.contains(key))
-    return assignment_.at(key);
-  return {};
+  return assignment_.at(key);
+}
+
+bool Assignment::contains(const Key& key) const
+{
+  return assignment_.contains(key);
 }
 
 void Assignment::erase(const Key& key)
@@ -99,7 +102,7 @@ std::ostream& operator<<(std::ostream& os, const Assignment& a)
   const auto& vars = a.getVariableNames();
   for (int i = 0; i < static_cast<int>(vars.size()); ++i)
   {
-    os << vars[i] << ": " << a.get(vars[i]).value();
+    os << vars[i] << ": " << a.get(vars[i]);
     if (i != static_cast<int>(vars.size()) - 1)
       os << ", ";
   }
@@ -133,11 +136,14 @@ FactorTable::FactorTable(const std::vector<Assignment>& assignments,
       set(assignments[i], probabilities[i]);
 }
 
-std::optional<FactorTable::Value> FactorTable::get(const Key& key) const
+const FactorTable::Value& FactorTable::get(const Key& key) const
 {
-  if (table_.contains(key))
-    return table_.at(key);
-  return {};
+  return table_.at(key);
+}
+
+bool FactorTable::contains(const Key& key) const
+{
+  return table_.contains(key);
 }
 
 void FactorTable::set(const Key& key, Value value)
@@ -169,7 +175,7 @@ bool operator==(const FactorTable& lhs, const FactorTable& rhs)
     return false;
 
   for (const auto& a : assignments)
-    if (std::abs(lhs.get(a).value() - rhs.get(a).value()) > 1e-12)
+    if (std::abs(lhs.get(a) - rhs.get(a)) > 1e-12)
       return false;
 
   return true;
@@ -189,8 +195,8 @@ bool FactorTable::AssignmentCompare::operator()(const Assignment& lhs,
 
   for (const auto& var : vars)
   {
-    const auto lhs_val = lhs.get(var).value();
-    const auto rhs_val = rhs.get(var).value();
+    const auto lhs_val = lhs.get(var);
+    const auto rhs_val = rhs.get(var);
 
     if (lhs_val < rhs_val)
       return true;
@@ -213,7 +219,7 @@ std::ostream& operator<<(std::ostream& os, const FactorTable& table)
       if (row < 0)
         os << vars[col];
       else
-        os << assignments[row].get(vars[col]).value();
+        os << assignments[row].get(vars[col]);
       os << "\t";
 
       if (col == static_cast<int>(vars.size()) - 1)
@@ -221,7 +227,7 @@ std::ostream& operator<<(std::ostream& os, const FactorTable& table)
         if (row < 0)
           os << "P";
         else
-          os << table.get(assignments[row]).value();
+          os << table.get(assignments[row]);
       }
     }
     if (row != static_cast<int>(assignments.size()) - 1)
@@ -303,12 +309,11 @@ Factor operator*(const Factor& lhs, const Factor& rhs)
     {
       auto merged_assignment = rhs_only_assignment;
       for (const auto& lhs_var_name : lhs_assignment.getVariableNames())
-        merged_assignment.set(lhs_var_name,
-                              lhs_assignment.get(lhs_var_name).value());
+        merged_assignment.set(lhs_var_name, lhs_assignment.get(lhs_var_name));
 
       const auto rhs_assignment = select(merged_assignment, rhs_names);
-      const auto merged_probability = lhs_table.get(lhs_assignment).value() *
-                                      rhs_table.get(rhs_assignment).value();
+      const auto merged_probability =
+          lhs_table.get(lhs_assignment) * rhs_table.get(rhs_assignment);
 
       merged_table.set(merged_assignment, merged_probability);
     }
@@ -358,7 +363,7 @@ std::vector<Factor> BayesianNetwork::getFactors() const
   return std::vector(values_view.begin(), values_view.end());
 }
 
-const std::unordered_map<Variable::Name, Factor>
+const std::unordered_map<Variable::Name, Factor>&
 BayesianNetwork::getNodes() const
 {
   return nodes_;
@@ -369,7 +374,7 @@ const AdjacencyList<Variable::Name>& BayesianNetwork::getGraph() const
   return graph_;
 }
 
-const Factor BayesianNetwork::getFactor(const Variable::Name& node) const
+const Factor& BayesianNetwork::getFactor(const Variable::Name& node) const
 {
   return nodes_.at(node);
 }
@@ -379,11 +384,10 @@ Assignment select(const Assignment& assignment,
 {
   auto sub_assignment = Assignment();
   auto sub_assign = [&assignment, &sub_assignment](const Variable::Name& name) {
-    auto value = assignment.get(name);
-    if (!value.has_value())
+    if (!assignment.contains(name))
       throw std::invalid_argument(
           "Cannot select variable names not contained by Assignment");
-    sub_assignment.set(name, assignment.get(name).value());
+    sub_assignment.set(name, assignment.get(name));
   };
   std::ranges::for_each(variable_names, sub_assign);
 
@@ -478,8 +482,7 @@ double computeProbability(const std::vector<FactorTable>& tables,
   auto get_probability = [&assignment](const FactorTable& table) {
     auto vars = table.getVariableNames();
     auto sub_assignment = select(assignment, vars);
-    auto p = table.get(sub_assignment);
-    return p.has_value() ? p.value() : 0.0;
+    return table.contains(sub_assignment) ? table.get(sub_assignment) : 0.0;
   };
 
   auto accumulate_probability = [&get_probability](double p,

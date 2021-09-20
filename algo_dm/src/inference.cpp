@@ -15,9 +15,9 @@ Factor marginalize(const Factor& factor, const Variable::Name name)
     auto pruned_assignment = assignment;
     pruned_assignment.erase(name);
 
-    auto existing_p = marginalized_table.get(pruned_assignment);
-    auto new_p = existing_p.has_value() ? existing_p.value() : 0.0;
-    new_p += table.get(assignment).value();
+    auto new_p = table.get(assignment);
+    if (marginalized_table.contains(pruned_assignment))
+      new_p += marginalized_table.get(pruned_assignment);
 
     marginalized_table.set(pruned_assignment, new_p);
   }
@@ -49,12 +49,11 @@ Factor condition(const Factor& factor,
   const auto& table = factor.getFactorTable();
   for (const auto& assignment : table.getAssignments())
   {
-    if (assignment.get(name).value() == value)
+    if (assignment.get(name) == value)
     {
       auto conditioned_assignment = assignment;
       conditioned_assignment.erase(name);
-      conditioned_table.set(conditioned_assignment,
-                            table.get(assignment).value());
+      conditioned_table.set(conditioned_assignment, table.get(assignment));
     }
   }
 
@@ -77,7 +76,7 @@ Factor condition(const Factor& factor, const Assignment& assignment)
 {
   const auto& vars = assignment.getVariableNames();
   auto condition_fold = [&assignment](const auto& f, const auto& v) {
-    return condition(f, v, assignment.get(v).value());
+    return condition(f, v, assignment.get(v));
   };
   return std::accumulate(vars.cbegin(), vars.cend(), factor, condition_fold);
 }
@@ -99,7 +98,7 @@ Assignment sample(const Factor& factor)
   const auto& table = factor.getFactorTable();
   const auto& assignments = table.getAssignments();
 
-  auto get_prob = [&table](const auto& a) { return table.get(a).value(); };
+  auto get_prob = [&table](const auto& a) { return table.get(a); };
   auto prob_view = assignments | std::views::transform(get_prob);
 
   const auto w = std::accumulate(prob_view.begin(), prob_view.end(), 0.0);
@@ -108,7 +107,7 @@ Assignment sample(const Factor& factor)
 
   for (const auto& assignment : assignments)
   {
-    total_prob += table.get(assignment).value() / w;
+    total_prob += table.get(assignment) / w;
     if (total_prob >= p)
       return assignment;
   }
@@ -128,7 +127,7 @@ Assignment SampleGenerator::sample() const
     const auto& factor = bn_.getFactor(node);
     auto conditioned_factor = condition(factor, assignment);
     auto random_assignment = algo_dm::sample(conditioned_factor);
-    auto value = random_assignment.get(node).value();
+    auto value = random_assignment.get(node);
     assignment.set(node, value);
   }
   return assignment;
@@ -150,18 +149,19 @@ bool isConsistent(
   auto e_vals = vars | std::views::transform(get_e);
 
   auto get_a = [& a = assignment](const auto& var) {
-    return a.get(var).has_value() ? a.get(var).value() : -1;
+    return a.contains(var) ? a.get(var) : -1;
   };
   auto a_vals = vars | std::views::transform(get_a);
 
   return std::ranges::equal(e_vals, a_vals);
 }
 
-Factor
-infer(const ExactInference&,
-      const BayesianNetwork& bn,
-      const std::vector<Variable::Name>& query,
-      const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+template <>
+Factor infer<ExactInference>(
+    const ExactInference&,
+    const BayesianNetwork& bn,
+    const std::vector<Variable::Name>& query,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
 {
   const auto& factors = bn.getFactors();
 
@@ -175,11 +175,12 @@ infer(const ExactInference&,
   return inference;
 }
 
-Factor
-infer(const VariableElimination& method,
-      const BayesianNetwork& bn,
-      const std::vector<Variable::Name>& query,
-      const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+template <>
+Factor infer<VariableElimination>(
+    const VariableElimination& method,
+    const BayesianNetwork& bn,
+    const std::vector<Variable::Name>& query,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
 {
   const auto& factors = bn.getFactors();
 
@@ -217,11 +218,12 @@ infer(const VariableElimination& method,
   return reduced_factor;
 }
 
-Factor
-infer(const DirectSampling& method,
-      const BayesianNetwork& bn,
-      const std::vector<Variable::Name>& query,
-      const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+template <>
+Factor infer<DirectSampling>(
+    const DirectSampling& method,
+    const BayesianNetwork& bn,
+    const std::vector<Variable::Name>& query,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
 {
   auto table = FactorTable();
   auto generator = SampleGenerator(bn);
@@ -232,8 +234,9 @@ infer(const DirectSampling& method,
     if (isConsistent(assignment, evidence))
     {
       auto sub_assignment = select(assignment, query);
-      auto prev_p = table.get(sub_assignment);
-      auto p = prev_p.has_value() ? prev_p.value() + 1.0 : 1.0;
+      auto p = 1.0;
+      if (table.contains(sub_assignment))
+        p += table.get(sub_assignment);
       table.set(sub_assignment, p);
     }
   }
@@ -242,4 +245,5 @@ infer(const DirectSampling& method,
   auto vars = select(bn.getVariables(), query);
   return Factor(vars, table);
 }
+
 } // namespace algo_dm

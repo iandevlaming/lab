@@ -86,7 +86,7 @@ TEST(AssignmentTest, ConstructionTest)
   EXPECT_EQ(assignment.getVariableNames(), ad::getKeys(map));
 
   for (const auto& item : map)
-    EXPECT_EQ(assignment.get(item.first).value(), item.second);
+    EXPECT_EQ(assignment.get(item.first), item.second);
 }
 
 TEST(AssignmentTest, AssignmentTest)
@@ -103,7 +103,7 @@ TEST(AssignmentTest, AssignmentTest)
   EXPECT_EQ(assignment.getVariableNames(), ad::getKeys(map));
 
   for (const auto& item : map)
-    EXPECT_EQ(assignment.get(item.first).value(), item.second);
+    EXPECT_EQ(assignment.get(item.first), item.second);
 }
 
 TEST(AssignmentTest, EqualityTest)
@@ -157,7 +157,7 @@ TEST(FactorTableTest, ConstructionTest)
   auto factor_table_keys = factor_table.getAssignments();
   EXPECT_TRUE(isPermutation(factor_table_keys, ad::getKeys(table)));
   for (const auto& key : factor_table_keys)
-    EXPECT_EQ(factor_table.get(key).value(), table[key]);
+    EXPECT_EQ(factor_table.get(key), table[key]);
 }
 
 TEST(FactorTableTest, EmptyConstructionTest)
@@ -185,7 +185,7 @@ TEST(FactorTableTest, BadGetTest)
   assignment.set("var", 1);
 
   auto table = ad::FactorTable();
-  EXPECT_FALSE(table.get(assignment).has_value());
+  EXPECT_FALSE(table.contains(assignment));
 }
 
 TEST(FactorTableTest, BadSetTest)
@@ -226,8 +226,8 @@ TEST(FactorTableTest, SetTest)
   for (const auto& assignment : table.getAssignments())
     EXPECT_NE(std::ranges::find(assignments, assignment), assignments.cend());
 
-  EXPECT_EQ(table.get(assignment_1).value(), prob_1);
-  EXPECT_EQ(table.get(assignment_2).value(), prob_2);
+  EXPECT_EQ(table.get(assignment_1), prob_1);
+  EXPECT_EQ(table.get(assignment_2), prob_2);
 }
 
 TEST(FactorTableTest, LateInitializationTest)
@@ -244,7 +244,7 @@ TEST(FactorTableTest, LateInitializationTest)
   for (auto& table : test_tables)
   {
     table.set(assignment, probability);
-    EXPECT_EQ(table.get(assignment).value(), probability);
+    EXPECT_EQ(table.get(assignment), probability);
     EXPECT_EQ(table.getAssignments(),
               std::vector<ad::Assignment>({assignment}));
     EXPECT_EQ(table.getVariableNames(),
@@ -272,8 +272,8 @@ TEST(FactorTableTest, NormalizeTest)
   table.set(assignment_2, prob);
 
   table.normalize();
-  EXPECT_DOUBLE_EQ(table.get(assignment_1).value(), 0.5);
-  EXPECT_DOUBLE_EQ(table.get(assignment_2).value(), 0.5);
+  EXPECT_DOUBLE_EQ(table.get(assignment_1), 0.5);
+  EXPECT_DOUBLE_EQ(table.get(assignment_2), 0.5);
 }
 
 TEST(FactorTest, ConstructionTest)
@@ -314,8 +314,8 @@ TEST(FactorTest, NormalizeTest)
   auto factor = ad::Factor({var}, table);
   factor.normalize();
 
-  EXPECT_DOUBLE_EQ(factor.getFactorTable().get(assignment_1).value(), 0.5);
-  EXPECT_DOUBLE_EQ(factor.getFactorTable().get(assignment_2).value(), 0.5);
+  EXPECT_DOUBLE_EQ(factor.getFactorTable().get(assignment_1), 0.5);
+  EXPECT_DOUBLE_EQ(factor.getFactorTable().get(assignment_2), 0.5);
 }
 
 TEST(SelectTest, SimpleTest)
@@ -330,8 +330,8 @@ TEST(SelectTest, SimpleTest)
 
   EXPECT_EQ(sub_assignment.getVariableNames(), sub_vars);
   for (auto i = 0; i < static_cast<int>(sub_vars.size()); ++i)
-    EXPECT_DOUBLE_EQ(sub_assignment.get(sub_vars[i]).value(),
-                     assignment.get(sub_vars[i]).value());
+    EXPECT_DOUBLE_EQ(sub_assignment.get(sub_vars[i]),
+                     assignment.get(sub_vars[i]));
 }
 
 TEST(SelectTest, BadVariableNameTest)

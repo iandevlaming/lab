@@ -3,7 +3,6 @@
 #include <algorithm>
 #include <iostream>
 #include <map>
-#include <optional>
 #include <ranges>
 #include <type_traits>
 #include <unordered_map>
@@ -69,7 +68,8 @@ public:
   Assignment() = default;
   Assignment(const std::map<Key, Value>& assignment);
   void set(const Key& key, Value value);
-  std::optional<Value> get(const Key& key) const;
+  const Value& get(const Key& key) const;
+  bool contains(const Key& key) const;
   void erase(const Key& key);
   std::vector<Key> getVariableNames() const;
   bool operator==(const Assignment& other) const;
@@ -102,8 +102,9 @@ public:
       const std::unordered_map<Assignment, double, Assignment::Hash>& table);
   FactorTable(const std::vector<Assignment>& assignments,
               const std::vector<double>& probabilities);
-  std::optional<Value> get(const Key& key) const;
+  const Value& get(const Key& key) const;
   void set(const Key& key, Value value);
+  bool contains(const Key& key) const;
   std::vector<Key> getAssignments() const;
   std::vector<Assignment::Key> getVariableNames() const;
   void normalize();
@@ -181,9 +182,9 @@ public:
                   const AdjacencyList<Variable::Name>& graph);
   std::vector<Variable> getVariables() const;
   std::vector<Factor> getFactors() const;
-  const std::unordered_map<Variable::Name, Factor> getNodes() const;
+  const std::unordered_map<Variable::Name, Factor>& getNodes() const;
   const AdjacencyList<Variable::Name>& getGraph() const;
-  const Factor getFactor(const Variable::Name& node) const;
+  const Factor& getFactor(const Variable::Name& node) const;
 
 private:
   std::unordered_map<Variable::Name, Factor> nodes_;

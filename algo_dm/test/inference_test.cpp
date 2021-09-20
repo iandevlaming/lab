@@ -159,7 +159,7 @@ TEST_F(Exercise3P4, DirectSampling)
   const auto& assignments = table.getAssignments();
 
   auto get_prob_of = [](const auto& t) {
-    return [&t](const auto& a) { return t.get(a).value(); };
+    return [&t](const auto& a) { return t.get(a); };
   };
   auto expected_prob_view =
       assignments | std::views::transform(get_prob_of(expected_table_));

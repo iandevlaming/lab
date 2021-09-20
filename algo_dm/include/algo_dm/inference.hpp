@@ -62,26 +62,9 @@ struct DirectSampling
   int num_samples;
 };
 
-Factor
-infer(const ExactInference& method,
-      const BayesianNetwork& bn,
-      const std::vector<Variable::Name>& query,
-      const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
 
 Factor
-infer(const VariableElimination& method,
-      const BayesianNetwork& bn,
-      const std::vector<Variable::Name>& query,
-      const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
-
-Factor
-infer(const DirectSampling& method,
-      const BayesianNetwork& bn,
-      const std::vector<Variable::Name>& query,
-      const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
-
-Factor
-infer(const LikelihoodWeightedSampling& method,
+infer(const MethodT& method,
       const BayesianNetwork& bn,
       const std::vector<Variable::Name>& query,
       const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
