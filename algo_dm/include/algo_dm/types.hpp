@@ -64,6 +64,8 @@ class Assignment
 public:
   using Key = Variable::Name;
   using Value = int;
+  using ItrT = std::map<Key, Value>::iterator;
+  using CItrT = std::map<Key, Value>::const_iterator;
 
   Assignment() = default;
   Assignment(const std::map<Key, Value>& assignment);
@@ -73,6 +75,13 @@ public:
   void erase(const Key& key);
   std::vector<Key> getVariableNames() const;
   bool operator==(const Assignment& other) const;
+
+  ItrT begin();
+  ItrT end();
+  CItrT begin() const;
+  CItrT end() const;
+  CItrT cbegin() const;
+  CItrT cend() const;
 
   struct Hash
   {

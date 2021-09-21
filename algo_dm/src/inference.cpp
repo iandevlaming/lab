@@ -61,17 +61,6 @@ Factor condition(const Factor& factor,
   return Factor(reduced_vars, conditioned_table);
 }
 
-Factor
-condition(const Factor& factor,
-          const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
-{
-  auto condition_fold = [](const auto& f, const auto& e) {
-    return condition(f, e.first, e.second);
-  };
-  return std::accumulate(
-      evidence.cbegin(), evidence.cend(), factor, condition_fold);
-}
-
 Factor condition(const Factor& factor, const Assignment& assignment)
 {
   const auto& vars = assignment.getVariableNames();
@@ -81,9 +70,8 @@ Factor condition(const Factor& factor, const Assignment& assignment)
   return std::accumulate(vars.cbegin(), vars.cend(), factor, condition_fold);
 }
 
-std::vector<Factor>
-condition(const std::vector<Factor>& factors,
-          const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+std::vector<Factor> condition(const std::vector<Factor>& factors,
+                              const Assignment& evidence)
 {
   auto condition_on = [](const auto& e) {
     return [&e](const auto& factor) { return condition(factor, e); };
@@ -139,19 +127,15 @@ Assignment sample(const BayesianNetwork& bn)
   return generator.sample();
 }
 
-bool isConsistent(
-    const Assignment& assignment,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+bool isConsistent(const Assignment& assignment, const Assignment& evidence)
 {
-  auto vars = evidence | std::views::keys;
+  auto vars = evidence.getVariableNames();
 
-  auto get_e = [& e = evidence](const auto& var) { return e.at(var); };
-  auto e_vals = vars | std::views::transform(get_e);
-
-  auto get_a = [& a = assignment](const auto& var) {
-    return a.contains(var) ? a.get(var) : -1;
+  auto get_from = [](const auto& c) {
+    return [&c](const auto& v) { return c.contains(v) ? c.get(v) : -1; };
   };
-  auto a_vals = vars | std::views::transform(get_a);
+  auto e_vals = vars | std::views::transform(get_from(evidence));
+  auto a_vals = vars | std::views::transform(get_from(assignment));
 
   return std::ranges::equal(e_vals, a_vals);
 }
@@ -180,11 +164,10 @@ Factor computeBlanket(const BayesianNetwork& bn,
 }
 
 template <>
-Factor infer<ExactInference>(
-    const ExactInference&,
-    const BayesianNetwork& bn,
-    const std::vector<Variable::Name>& query,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+Factor infer<ExactInference>(const ExactInference&,
+                             const BayesianNetwork& bn,
+                             const std::vector<Variable::Name>& query,
+                             const Assignment& evidence)
 {
   const auto& factors = bn.getFactors();
 
@@ -199,11 +182,10 @@ Factor infer<ExactInference>(
 }
 
 template <>
-Factor infer<VariableElimination>(
-    const VariableElimination& method,
-    const BayesianNetwork& bn,
-    const std::vector<Variable::Name>& query,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+Factor infer<VariableElimination>(const VariableElimination& method,
+                                  const BayesianNetwork& bn,
+                                  const std::vector<Variable::Name>& query,
+                                  const Assignment& evidence)
 {
   const auto& factors = bn.getFactors();
 
@@ -242,11 +224,10 @@ Factor infer<VariableElimination>(
 }
 
 template <>
-Factor infer<DirectSampling>(
-    const DirectSampling& method,
-    const BayesianNetwork& bn,
-    const std::vector<Variable::Name>& query,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+Factor infer<DirectSampling>(const DirectSampling& method,
+                             const BayesianNetwork& bn,
+                             const std::vector<Variable::Name>& query,
+                             const Assignment& evidence)
 {
   auto table = FactorTable();
   auto generator = SampleGenerator(bn);
@@ -270,11 +251,11 @@ Factor infer<DirectSampling>(
 }
 
 template <>
-Factor infer<LikelihoodWeightedSampling>(
-    const LikelihoodWeightedSampling& method,
-    const BayesianNetwork& bn,
-    const std::vector<Variable::Name>& query,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+Factor
+infer<LikelihoodWeightedSampling>(const LikelihoodWeightedSampling& method,
+                                  const BayesianNetwork& bn,
+                                  const std::vector<Variable::Name>& query,
+                                  const Assignment& evidence)
 {
   const auto& factors = bn.getFactors();
   const auto ordering = topoSort(bn.getGraph());
@@ -290,7 +271,7 @@ Factor infer<LikelihoodWeightedSampling>(
       const auto& factor = bn.getFactor(var);
       if (evidence.contains(var))
       {
-        assignment.set(var, evidence.at(var));
+        assignment.set(var, evidence.get(var));
         const auto var_names = getNames(factor.getVariables());
         const auto sub_assignment = select(assignment, var_names);
         const auto& f_table = factor.getFactorTable();
@@ -315,11 +296,10 @@ Factor infer<LikelihoodWeightedSampling>(
   return Factor(vars, table);
 }
 
-Assignment updateGibbsSample(
-    const Assignment& assignment,
-    const BayesianNetwork& bn,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
-    const std::vector<Variable::Name>& ordering)
+Assignment updateGibbsSample(const Assignment& assignment,
+                             const BayesianNetwork& bn,
+                             const Assignment& evidence,
+                             const std::vector<Variable::Name>& ordering)
 {
   auto updated_assignment = assignment;
   for (const auto& var : ordering)
@@ -335,12 +315,11 @@ Assignment updateGibbsSample(
   return updated_assignment;
 }
 
-Assignment sampleGibbs(
-    const Assignment& assignment,
-    const BayesianNetwork& bn,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
-    const std::vector<Variable::Name>& ordering,
-    int num_samples)
+Assignment sampleGibbs(const Assignment& assignment,
+                       const BayesianNetwork& bn,
+                       const Assignment& evidence,
+                       const std::vector<Variable::Name>& ordering,
+                       int num_samples)
 {
   auto updated_assignment = assignment;
   for (auto i = 0; i < num_samples; ++i)
@@ -350,11 +329,10 @@ Assignment sampleGibbs(
 }
 
 template <>
-Factor infer<GibbsSampling>(
-    const GibbsSampling& method,
-    const BayesianNetwork& bn,
-    const std::vector<Variable::Name>& query,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+Factor infer<GibbsSampling>(const GibbsSampling& method,
+                            const BayesianNetwork& bn,
+                            const std::vector<Variable::Name>& query,
+                            const Assignment& evidence)
 {
   auto table = FactorTable();
   auto ordering = setUnion(method.ordering, getNames(bn.getVariables()));

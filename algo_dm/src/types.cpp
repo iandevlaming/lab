@@ -85,6 +85,24 @@ bool Assignment::operator==(const Assignment& other) const
   return assignment_ == other.assignment_;
 }
 
+typename Assignment::ItrT Assignment::begin() { return assignment_.begin(); }
+
+typename Assignment::ItrT Assignment::end() { return assignment_.end(); }
+
+typename Assignment::CItrT Assignment::begin() const { return cbegin(); }
+
+typename Assignment::CItrT Assignment::end() const { return cend(); }
+
+typename Assignment::CItrT Assignment::cbegin() const
+{
+  return assignment_.cbegin();
+}
+
+typename Assignment::CItrT Assignment::cend() const
+{
+  return assignment_.cend();
+}
+
 size_t Assignment::Hash::operator()(const Assignment& assignment) const
 {
   auto seed = static_cast<size_t>(0);

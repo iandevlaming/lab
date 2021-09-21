@@ -3,7 +3,6 @@
 #include <algo_dm/types.hpp>
 
 #include <ranges>
-#include <unordered_map>
 
 namespace algo_dm
 {
@@ -22,15 +21,10 @@ Factor condition(const Factor& factor,
                  const Variable::Name name,
                  const Assignment::Value& value);
 
-Factor condition(
-    const Factor& factor,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
-
-std::vector<Factor> condition(
-    const std::vector<Factor>& factors,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
-
 Factor condition(const Factor& factor, const Assignment& assignment);
+
+std::vector<Factor> condition(const std::vector<Factor>& factors,
+                              const Assignment& evidence);
 
 Assignment sample(const Factor& factor);
 
@@ -47,9 +41,7 @@ private:
 
 Assignment sample(const BayesianNetwork& bn);
 
-bool isConsistent(
-    const Assignment& assignment,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
+bool isConsistent(const Assignment& assignment, const Assignment& evidence);
 
 Factor computeBlanket(const BayesianNetwork& bn,
                       const Assignment& assignment,
@@ -83,24 +75,21 @@ struct GibbsSampling
 };
 
 template <typename MethodT>
-Factor
-infer(const MethodT& method,
-      const BayesianNetwork& bn,
-      const std::vector<Variable::Name>& query,
-      const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
+Factor infer(const MethodT& method,
+             const BayesianNetwork& bn,
+             const std::vector<Variable::Name>& query,
+             const Assignment& evidence);
 
-Assignment updateGibbsSample(
-    const Assignment& assignment,
-    const BayesianNetwork& bn,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
-    const std::vector<Variable::Name>& ordering);
+Assignment updateGibbsSample(const Assignment& assignment,
+                             const BayesianNetwork& bn,
+                             const Assignment& evidence,
+                             const std::vector<Variable::Name>& ordering);
 
-Assignment sampleGibbs(
-    const Assignment& assignment,
-    const BayesianNetwork& bn,
-    const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
-    const std::vector<Variable::Name>& ordering,
-    int num_samples);
+Assignment sampleGibbs(const Assignment& assignment,
+                       const BayesianNetwork& bn,
+                       const Assignment& evidence,
+                       const std::vector<Variable::Name>& ordering,
+                       int num_samples);
 } // namespace algo_dm
 
 #include <algo_dm/inl/inference.inl>

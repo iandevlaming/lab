@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include <unordered_map>
 #include <vector>
 
 TEST(ProductTest, Example3P1)
@@ -111,8 +112,8 @@ protected:
 
     query_.push_back(c.getName());
 
-    evidence_[s.getName()] = 1;
-    evidence_[v.getName()] = 0;
+    evidence_.set(s.getName(), 1);
+    evidence_.set(v.getName(), 0);
 
     const auto p_0 = 0.80 * 0.009 * 0.2;
     const auto p_1 = 0.19 * 0.750 * 0.5;
@@ -156,7 +157,7 @@ protected:
   std::vector<ad::Variable> variables_;
   ad::BayesianNetwork bayesian_network_;
   std::vector<ad::Variable::Name> query_;
-  std::unordered_map<ad::Variable::Name, ad::Assignment::Value> evidence_;
+  ad::Assignment evidence_;
   ad::FactorTable expected_table_;
 };
 
