@@ -41,14 +41,15 @@ bool operator==(const Variable& lhs, const Variable& rhs)
 
 std::vector<Variable::Name> getNames(const std::vector<Variable>& variables)
 {
-  auto variable_names = std::vector<Variable::Name>();
-  variable_names.reserve(variables.size());
-
   auto select_names = [](const Variable& v) { return v.getName(); };
-  std::ranges::transform(
-      variables, std::back_inserter(variable_names), select_names);
+  auto names_view = std::views::transform(variables, select_names);
+  return std::vector<Variable::Name>(names_view.begin(), names_view.end());
+}
 
-  return variable_names;
+std::ostream& operator<<(std::ostream& os, const Variable& var)
+{
+  os << "Variable " << var.getName() << " (" << var.getNumVals() << ")";
+  return os;
 }
 
 Assignment::Assignment(const std::map<Key, Value>& assignment)
@@ -58,14 +59,23 @@ Assignment::Assignment(const std::map<Key, Value>& assignment)
 
 void Assignment::set(const Key& key, Value value) { assignment_[key] = value; }
 
-std::optional<Assignment::Value> Assignment::get(const Key& key) const
+const Assignment::Value& Assignment::get(const Key& key) const
 {
-  if (assignment_.contains(key))
-    return assignment_.at(key);
-  return {};
+  return assignment_.at(key);
 }
 
-std::vector<Assignment::Key> Assignment::getKeys() const
+bool Assignment::contains(const Key& key) const
+{
+  return assignment_.contains(key);
+}
+
+void Assignment::erase(const Key& key)
+{
+  if (assignment_.contains(key))
+    assignment_.erase(key);
+}
+
+std::vector<Assignment::Key> Assignment::getVariableNames() const
 {
   return algo_dm::getKeys(assignment_);
 }
@@ -73,6 +83,24 @@ std::vector<Assignment::Key> Assignment::getKeys() const
 bool Assignment::operator==(const Assignment& other) const
 {
   return assignment_ == other.assignment_;
+}
+
+typename Assignment::ItrT Assignment::begin() { return assignment_.begin(); }
+
+typename Assignment::ItrT Assignment::end() { return assignment_.end(); }
+
+typename Assignment::CItrT Assignment::begin() const { return cbegin(); }
+
+typename Assignment::CItrT Assignment::end() const { return cend(); }
+
+typename Assignment::CItrT Assignment::cbegin() const
+{
+  return assignment_.cbegin();
+}
+
+typename Assignment::CItrT Assignment::cend() const
+{
+  return assignment_.cend();
 }
 
 size_t Assignment::Hash::operator()(const Assignment& assignment) const
@@ -87,21 +115,31 @@ size_t Assignment::Hash::operator()(const Assignment& assignment) const
   return seed;
 }
 
+std::ostream& operator<<(std::ostream& os, const Assignment& a)
+{
+  const auto& vars = a.getVariableNames();
+  for (int i = 0; i < static_cast<int>(vars.size()); ++i)
+  {
+    os << vars[i] << ": " << a.get(vars[i]);
+    if (i != static_cast<int>(vars.size()) - 1)
+      os << ", ";
+  }
+  return os;
+}
+
+FactorTable::FactorTable(
+    const std::map<Assignment, double, AssignmentCompare>& table)
+{
+  checkInput(table);
+  table_ = table;
+}
+
 FactorTable::FactorTable(
     const std::unordered_map<Assignment, double, Assignment::Hash>& table)
-    : table_(table)
 {
-  if (!table_.empty())
-  {
-    variable_names_ = table.cbegin()->first.getKeys();
-    auto has_bad_keys = [&](const auto& p) {
-      return p.first.getKeys() != variable_names_;
-    };
-
-    if (std::ranges::any_of(table_, has_bad_keys))
-      throw std::invalid_argument(
-          "All Assignments in a FactorTable must have the same keys");
-  }
+  checkInput(table);
+  table_ = std::map<Assignment, double, AssignmentCompare>(table.cbegin(),
+                                                           table.cend());
 }
 
 FactorTable::FactorTable(const std::vector<Assignment>& assignments,
@@ -116,38 +154,49 @@ FactorTable::FactorTable(const std::vector<Assignment>& assignments,
       set(assignments[i], probabilities[i]);
 }
 
-std::optional<FactorTable::Value> FactorTable::get(const Key& key) const
+const FactorTable::Value& FactorTable::get(const Key& key) const
 {
-  if (table_.contains(key))
-    return table_.at(key);
-  return {};
+  return table_.at(key);
+}
+
+bool FactorTable::contains(const Key& key) const
+{
+  return table_.contains(key);
 }
 
 void FactorTable::set(const Key& key, Value value)
 {
-  if (!table_.empty() && variable_names_ != key.getKeys())
+  if (!table_.empty() && variable_names_ != key.getVariableNames())
     throw std::invalid_argument(
         "All Assignments in a FactorTable must have the same keys");
 
   if (table_.empty())
-    variable_names_ = key.getKeys();
+    variable_names_ = key.getVariableNames();
 
   table_[key] = value;
 }
 
-std::vector<FactorTable::Key> FactorTable::getKeys() const
+std::vector<FactorTable::Key> FactorTable::getAssignments() const
 {
   return algo_dm::getKeys(table_);
 }
 
-std::vector<Assignment::Key> FactorTable::getAssignmentKeys() const
+std::vector<Assignment::Key> FactorTable::getVariableNames() const
 {
   return variable_names_;
 }
 
-bool FactorTable::operator==(const FactorTable& rhs) const
+bool operator==(const FactorTable& lhs, const FactorTable& rhs)
 {
-  return table_ == rhs.table_;
+  const auto& assignments = lhs.getAssignments();
+  if (assignments != rhs.getAssignments())
+    return false;
+
+  for (const auto& a : assignments)
+    if (std::abs(lhs.get(a) - rhs.get(a)) > 1e-12)
+      return false;
+
+  return true;
 }
 
 void FactorTable::normalize()
@@ -155,6 +204,55 @@ void FactorTable::normalize()
   auto sum_value = [](auto sum, const auto& p) { return sum + p.second; };
   auto z = std::accumulate(table_.cbegin(), table_.cend(), 0.0, sum_value);
   std::ranges::for_each(table_, [&z](auto& p) { p.second /= z; });
+}
+
+bool FactorTable::AssignmentCompare::operator()(const Assignment& lhs,
+                                                const Assignment& rhs) const
+{
+  const auto& vars = lhs.getVariableNames();
+
+  for (const auto& var : vars)
+  {
+    const auto lhs_val = lhs.get(var);
+    const auto rhs_val = rhs.get(var);
+
+    if (lhs_val < rhs_val)
+      return true;
+    else if (lhs_val > rhs_val)
+      return false;
+  }
+
+  return false;
+}
+
+std::ostream& operator<<(std::ostream& os, const FactorTable& table)
+{
+  const auto& vars = table.getVariableNames();
+  const auto& assignments = table.getAssignments();
+
+  for (int row = -1; row < static_cast<int>(assignments.size()); ++row)
+  {
+    for (int col = 0; col < static_cast<int>(vars.size()); ++col)
+    {
+      if (row < 0)
+        os << vars[col];
+      else
+        os << assignments[row].get(vars[col]);
+      os << "\t";
+
+      if (col == static_cast<int>(vars.size()) - 1)
+      {
+        if (row < 0)
+          os << "P";
+        else
+          os << table.get(assignments[row]);
+      }
+    }
+    if (row != static_cast<int>(assignments.size()) - 1)
+      os << "\n";
+  }
+
+  return os;
 }
 
 Factor::Factor(const std::vector<Variable>& variables, const FactorTable& table)
@@ -171,67 +269,168 @@ const std::vector<Variable>& Factor::getVariables() const { return variables_; }
 
 const FactorTable& Factor::getFactorTable() const { return table_; }
 
+std::ostream& operator<<(std::ostream& os, const Factor& f)
+{
+  const auto& vars = f.getVariables();
+  const auto& table = f.getFactorTable();
+
+  os << "Variables: ";
+  for (int i = 0; i < static_cast<int>(vars.size()); ++i)
+  {
+    os << vars[i];
+    if (i != static_cast<int>(vars.size()) - 1)
+      os << ", ";
+  }
+
+  os << "\n\n" << table;
+
+  return os;
+}
+
 void Factor::normalize() { table_.normalize(); }
 
-AdjacencyList::AdjacencyList(int num_nodes)
-    : num_nodes_(num_nodes),
-      graph_(std::vector<std::unordered_set<int>>(num_nodes,
-                                                  std::unordered_set<int>()))
+bool operator==(const Factor& lhs, const Factor& rhs)
+{
+  auto equal = lhs.getFactorTable() == rhs.getFactorTable();
+  equal = equal && isPermutation(lhs.getVariables(), rhs.getVariables());
+  return equal;
+}
+
+bool isInScope(const Factor& factor, const Variable::Name name)
+{
+  auto is_named = [](const auto& var_name) {
+    return [&var_name](const auto& var) { return var.getName() == var_name; };
+  };
+
+  return std::ranges::any_of(factor.getVariables(), is_named(name));
+}
+
+Factor operator*(const Factor& lhs, const Factor& rhs)
+{
+  const auto& lhs_vars = lhs.getVariables();
+  const auto& rhs_vars = rhs.getVariables();
+
+  const auto& lhs_table = lhs.getFactorTable();
+  const auto& rhs_table = rhs.getFactorTable();
+
+  const auto rhs_names = getNames(rhs_vars);
+
+  const auto rhs_only_vars = setDiff(rhs_vars, lhs_vars);
+  const auto rhs_only_assignments = rhs_only_vars.empty()
+                                        ? std::vector({Assignment()})
+                                        : assign(rhs_only_vars);
+
+  auto merged_table = FactorTable();
+  for (const auto& lhs_assignment : lhs_table.getAssignments())
+  {
+    for (const auto& rhs_only_assignment : rhs_only_assignments)
+    {
+      auto merged_assignment = rhs_only_assignment;
+      for (const auto& lhs_var_name : lhs_assignment.getVariableNames())
+        merged_assignment.set(lhs_var_name, lhs_assignment.get(lhs_var_name));
+
+      const auto rhs_assignment = select(merged_assignment, rhs_names);
+      const auto merged_probability =
+          lhs_table.get(lhs_assignment) * rhs_table.get(rhs_assignment);
+
+      merged_table.set(merged_assignment, merged_probability);
+    }
+  }
+
+  auto merged_vars = lhs_vars;
+  std::ranges::copy(rhs_only_vars, std::back_inserter(merged_vars));
+
+  return Factor(merged_vars, merged_table);
+}
+
+std::vector<Variable::Name> getNames(const std::vector<Factor>& factors)
+{
+  auto get_names = [](const auto& names, const auto& factor) {
+    return setUnion(names, getNames(factor.getVariables()));
+  };
+  return std::accumulate(factors.cbegin(),
+                         factors.cend(),
+                         std::vector<Variable::Name>(),
+                         get_names);
+}
+
+BayesianNetwork::BayesianNetwork(
+    const std::unordered_map<Variable::Name, Factor>& nodes,
+    const AdjacencyList<Variable::Name>& graph)
+    : nodes_(nodes), graph_(graph)
 {
 }
 
-int AdjacencyList::getNumNodes() const { return num_nodes_; }
-
-void AdjacencyList::addEdge(int from_node, int to_node)
+std::vector<Variable> BayesianNetwork::getVariables() const
 {
-  if (from_node >= num_nodes_ || to_node >= num_nodes_)
-    throw std::invalid_argument("Edges must be between nodes on the graph");
-
-  graph_[from_node].insert(to_node);
-}
-const std::unordered_set<int>& AdjacencyList::getEdges(int node) const
-{
-  if (node >= num_nodes_)
-    throw std::invalid_argument("Cannot get edges for nodes off of the graph");
-
-  return graph_[node];
+  auto get_variables = [](const auto& f) { return f.getVariables(); };
+  auto variables_view = std::ranges::views::common(
+      nodes_ | std::views::values | std::views::transform(get_variables));
+  auto join = [](const auto& lhs, const auto& rhs) {
+    return setUnion(lhs, rhs);
+  };
+  return std::accumulate(variables_view.begin(),
+                         variables_view.end(),
+                         std::vector<Variable>(),
+                         join);
 }
 
-BayesianNetwork::BayesianNetwork(const std::vector<Variable>& variables,
-                                 const std::vector<Factor>& factors,
-                                 const AdjacencyList& graph)
-    : variables_(variables), factors_(factors), graph_(graph)
+std::vector<Factor> BayesianNetwork::getFactors() const
 {
-  if (variables_.size() != factors.size())
-    throw std::invalid_argument("Every node must have a factor");
+  auto values_view = std::ranges::views::common(nodes_ | std::views::values);
+  return std::vector(values_view.begin(), values_view.end());
 }
 
-const std::vector<Variable>& BayesianNetwork::getVariables() const
+const std::unordered_map<Variable::Name, Factor>&
+BayesianNetwork::getNodes() const
 {
-  return variables_;
+  return nodes_;
 }
 
-const std::vector<Factor>& BayesianNetwork::getFactors() const
+const AdjacencyList<Variable::Name>& BayesianNetwork::getGraph() const
 {
-  return factors_;
+  return graph_;
 }
 
-const AdjacencyList& BayesianNetwork::getGraph() const { return graph_; }
+const Factor& BayesianNetwork::getFactor(const Variable::Name& node) const
+{
+  return nodes_.at(node);
+}
 
 Assignment select(const Assignment& assignment,
                   const std::vector<Variable::Name>& variable_names)
 {
   auto sub_assignment = Assignment();
   auto sub_assign = [&assignment, &sub_assignment](const Variable::Name& name) {
-    auto value = assignment.get(name);
-    if (!value.has_value())
+    if (!assignment.contains(name))
       throw std::invalid_argument(
           "Cannot select variable names not contained by Assignment");
-    sub_assignment.set(name, assignment.get(name).value());
+    sub_assignment.set(name, assignment.get(name));
   };
   std::ranges::for_each(variable_names, sub_assign);
 
   return sub_assignment;
+}
+
+std::vector<Variable> select(const std::vector<Variable>& variables,
+                             const std::vector<Variable::Name>& variable_names)
+{
+  auto is_selected = [& n = variable_names](const Variable& v) {
+    return contains(n, v.getName());
+  };
+  auto vars_view = variables | std::views::filter(is_selected);
+  return std::vector(vars_view.begin(), vars_view.end());
+}
+
+std::vector<Variable> erase(const std::vector<Variable>& variables,
+                            const Variable::Name& name)
+{
+  auto is_not_named = [](const auto& var_name) {
+    return [&var_name](const auto& var) { return var.getName() != var_name; };
+  };
+
+  auto reduced_view = std::views::filter(variables, is_not_named(name));
+  return std::vector<Variable>(reduced_view.begin(), reduced_view.end());
 }
 
 // TODO: handle 0 num values
@@ -299,10 +498,9 @@ double computeProbability(const std::vector<FactorTable>& tables,
                           const Assignment& assignment)
 {
   auto get_probability = [&assignment](const FactorTable& table) {
-    auto vars = table.getAssignmentKeys();
+    auto vars = table.getVariableNames();
     auto sub_assignment = select(assignment, vars);
-    auto p = table.get(sub_assignment);
-    return p.has_value() ? p.value() : 0.0;
+    return table.contains(sub_assignment) ? table.get(sub_assignment) : 0.0;
   };
 
   auto accumulate_probability = [&get_probability](double p,
