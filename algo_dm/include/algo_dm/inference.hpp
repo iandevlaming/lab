@@ -74,12 +74,33 @@ struct LikelihoodWeightedSampling
   int num_samples;
 };
 
+struct GibbsSampling
+{
+  int num_samples;
+  int num_burnin;
+  int num_skip;
+  std::vector<Variable::Name> ordering;
+};
+
 template <typename MethodT>
 Factor
 infer(const MethodT& method,
       const BayesianNetwork& bn,
       const std::vector<Variable::Name>& query,
       const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
+
+Assignment updateGibbsSample(
+    const Assignment& assignment,
+    const BayesianNetwork& bn,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
+    const std::vector<Variable::Name>& ordering);
+
+Assignment sampleGibbs(
+    const Assignment& assignment,
+    const BayesianNetwork& bn,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
+    const std::vector<Variable::Name>& ordering,
+    int num_samples);
 } // namespace algo_dm
 
 #include <algo_dm/inl/inference.inl>

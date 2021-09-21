@@ -181,7 +181,7 @@ TEST_F(Exercise3P4, SumProductVariableEliminatioInferenceTest)
   EXPECT_EQ(factor_c.getFactorTable(), expected_table_);
 }
 
-TEST_F(Exercise3P4, LikelihoodWeightedSampling)
+TEST_F(Exercise3P4, DirectSampling)
 {
   const auto num_samples = 10000; // needed to ensure sampling all values of c
   const auto method = ad::DirectSampling({num_samples});
@@ -190,10 +190,23 @@ TEST_F(Exercise3P4, LikelihoodWeightedSampling)
   EXPECT_TRUE(isOrderedCorrectly(factor_c));
 }
 
-TEST_F(Exercise3P4, DirectSampling)
+TEST_F(Exercise3P4, LikelihoodWeightedSampling)
 {
   const auto num_samples = 10000; // needed to ensure sampling all values of c
   const auto method = ad::LikelihoodWeightedSampling({num_samples});
+  const auto factor_c = ad::infer(method, bayesian_network_, query_, evidence_);
+
+  EXPECT_TRUE(isOrderedCorrectly(factor_c));
+}
+
+TEST_F(Exercise3P4, GibbsSampling)
+{
+  const auto num_samples = 2000; // needed to ensure sampling all values of c
+  const auto num_burnin = 100;
+  const auto num_skip = 20;
+  const auto ordering = ad::getNames(variables_);
+  const auto method =
+      ad::GibbsSampling({num_samples, num_burnin, num_skip, ordering});
   const auto factor_c = ad::infer(method, bayesian_network_, query_, evidence_);
 
   EXPECT_TRUE(isOrderedCorrectly(factor_c));

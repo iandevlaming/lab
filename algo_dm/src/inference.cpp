@@ -315,4 +315,70 @@ Factor infer<LikelihoodWeightedSampling>(
   return Factor(vars, table);
 }
 
+Assignment updateGibbsSample(
+    const Assignment& assignment,
+    const BayesianNetwork& bn,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
+    const std::vector<Variable::Name>& ordering)
+{
+  auto updated_assignment = assignment;
+  for (const auto& var : ordering)
+  {
+    if (!evidence.contains(var))
+    {
+      const auto blanket = computeBlanket(bn, updated_assignment, var);
+      const auto random_assignment = sample(blanket);
+      updated_assignment.set(var, random_assignment.get(var));
+    }
+  }
+
+  return updated_assignment;
+}
+
+Assignment sampleGibbs(
+    const Assignment& assignment,
+    const BayesianNetwork& bn,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence,
+    const std::vector<Variable::Name>& ordering,
+    int num_samples)
+{
+  auto updated_assignment = assignment;
+  for (auto i = 0; i < num_samples; ++i)
+    updated_assignment =
+        updateGibbsSample(updated_assignment, bn, evidence, ordering);
+  return updated_assignment;
+}
+
+template <>
+Factor infer<GibbsSampling>(
+    const GibbsSampling& method,
+    const BayesianNetwork& bn,
+    const std::vector<Variable::Name>& query,
+    const std::unordered_map<Variable::Name, Assignment::Value>& evidence)
+{
+  auto table = FactorTable();
+  auto ordering = setUnion(method.ordering, getNames(bn.getVariables()));
+
+  auto random_sample = sample(bn);
+  for (const auto& e : evidence)
+    random_sample.set(e.first, e.second);
+
+  random_sample =
+      sampleGibbs(random_sample, bn, evidence, ordering, method.num_burnin);
+  for (auto i = 0; i < method.num_samples; ++i)
+  {
+    random_sample =
+        sampleGibbs(random_sample, bn, evidence, ordering, method.num_skip);
+    const auto& random_assignment = select(random_sample, query);
+
+    auto n_observations = 1.0;
+    if (table.contains(random_assignment))
+      n_observations += table.get(random_assignment);
+    table.set(random_assignment, n_observations);
+  }
+  table.normalize();
+
+  const auto vars = select(bn.getVariables(), query);
+  return Factor(vars, table);
+}
 } // namespace algo_dm
