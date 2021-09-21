@@ -7,6 +7,9 @@
 
 namespace algo_dm
 {
+template <typename ItrT>
+Factor product(const ItrT& begin, const ItrT& end);
+
 template <template <typename...> typename C, typename... Ts>
 Factor product(const C<Factor, Ts...>& factors);
 
@@ -47,6 +50,10 @@ Assignment sample(const BayesianNetwork& bn);
 bool isConsistent(
     const Assignment& assignment,
     const std::unordered_map<Variable::Name, Assignment::Value>& evidence);
+
+Factor computeBlanket(const BayesianNetwork& bn,
+                      const Assignment& assignment,
+                      const Variable::Name& variable);
 
 struct ExactInference
 {

@@ -156,6 +156,29 @@ bool isConsistent(
   return std::ranges::equal(e_vals, a_vals);
 }
 
+Factor computeBlanket(const BayesianNetwork& bn,
+                      const Assignment& assignment,
+                      const Variable::Name& variable)
+{
+  auto sub_assignment = assignment;
+  sub_assignment.erase(variable);
+
+  auto depends_on = [](const auto& v) {
+    return [&v](const auto& f) { return isInScope(f, v); };
+  };
+  auto condition_on = [](const auto& a) {
+    return [&a](const auto& f) { return condition(f, a); };
+  };
+
+  const auto& factors = bn.getFactors();
+  auto condition_view = factors | std::views::filter(depends_on(variable)) |
+                        std::views::transform(condition_on(sub_assignment));
+
+  auto blanket = product(condition_view.begin(), condition_view.end());
+  blanket.normalize();
+  return blanket;
+}
+
 template <>
 Factor infer<ExactInference>(
     const ExactInference&,
